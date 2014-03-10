@@ -54,3 +54,13 @@ To launch the program simply type:
 Test data:
 ----------------------
 
+For raw BAM files:
+
+    src/assignRG -i testData/index.txt -o testData/demultiplexed.bam testData/todemultiplex.bam
+
+For FASTQ files
+    
+
+
+
+   
