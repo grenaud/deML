@@ -1,0 +1,9 @@
+[submodule "SimpleJSON"]
+	path = SimpleJSON
+	url = https://github.com/MJPA/SimpleJSON.git
+[submodule "bamtools"]
+	path = bamtools
+	url = https://github.com/pezmaster31/bamtools.git
+[submodule "libgab"]
+	path = libgab
+	url = https://github.com/grenaud/libgab.git
