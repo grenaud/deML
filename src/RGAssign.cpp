@@ -104,135 +104,280 @@ indexData intern_readIndex(string filename){
 
     //reading the files
 
-    myFile.open(filename.c_str(), ios::in);
-    if (myFile.is_open()){
 
-	while ( getline (myFile,line)){
-	    line+=' ';
 
-	    if(isFirstLine){
-		if(line[0] == '#'){
-		    unsigned int i=0;
-		    int numberOfFields=0;
-		    bool inWS=true;
-		    while(i<line.length()){			
-			if( isspace(line[i])){			    
-			    inWS=true;
-			}else{
-			    if(inWS){
-				numberOfFields++;
-			    }
-			    inWS=false;			    
-			}
-			i++;
-		    }
-		    
-		    if(numberOfFields==2){ 
-			toReturn.isDoubleIndex=false; 
+    // myFile.open(filename.c_str(), ios::in);
+    // if (myFile.is_open()){
+
+    vector<string> allLinesIndex = allTokens(filename,'\n');
+
+    //while ( getline (myFile,line)){
+    for(unsigned int i=0;i<allLinesIndex.size();i++){
+	line = allLinesIndex[i];
+	if(line.empty())
+	    continue;
+	line+=' ';
+	// cerr<<"line #"<<line<<"#"<<toReturn.isDoubleIndex<<endl;
+
+	if(isFirstLine){
+	    if(line[0] == '#'){
+		unsigned int i=0;
+		int numberOfFields=0;
+		bool inWS=true;
+		while(i<line.length()){			
+		    if( isspace(line[i])){			    
+			inWS=true;
 		    }else{
-			if(numberOfFields==3 || numberOfFields==5){
-			    toReturn.isDoubleIndex=true; 
-			}else{
-			    cerr << "Must have 2, 3 or 5 fields"<<endl;
-			    exit(1);
-			}			
-		    }
-
-		}else{
-		    cerr << "First line must begin with #"<<endl;
-		    exit(1);
-		}
-		isFirstLine=false;
-	    }else{
-		int i=0;
-		int fieldIndex=0;
-		bool inWS=false;
-		int lastOneNW=0;
-		string foundName;
-		while(i<int(line.length())){		
-		    
-		    if( isspace(line[i]) && i==0){
-			cerr<<line<<endl;
-			cerr << "First character cannot be a space"<<endl;
-			exit(1);
-		    }			    
-		    if( isspace(line[i]) ){			    
-			if(!inWS){ //found a field
-
-			    //first field, first index
-			    if(fieldIndex==0){
-				toReturn.indices1.push_back(toUpperCase(line.substr(lastOneNW,i-lastOneNW)));
-
-				if(toReturn.mlindex1 < (i-lastOneNW)){
-				    toReturn.mlindex1 =(i-lastOneNW);
-				}
-
-			    }else{
-				//second field, either name of single ind or second index
-				if(fieldIndex==1){
-				    if(toReturn.isDoubleIndex){
-					toReturn.indices2.push_back(toUpperCase(line.substr(lastOneNW,i-lastOneNW)));
-					if(toReturn.mlindex2 < (i-lastOneNW)){
-					    toReturn.mlindex2 =(i-lastOneNW);
-					}
-				    }else{
-					foundName=line.substr(lastOneNW,i-lastOneNW);
-					//duplicated names ?					
-					if(toReturn.namesMap.find(  foundName  ) !=  toReturn.namesMap.end()){
-					    cerr<<"Warning: The sequence name is duplicated "<<foundName<<endl;
-					    //exit(1);
-					}else{
-					    toReturn.namesMap[ foundName ] = ""; 
-					}
-
-					toReturn.names.push_back( foundName );
-
-				    }
-                                }else if(fieldIndex==2){
-                                    //sequence name when two indices
-                                    if(toReturn.isDoubleIndex){
-                                        //duplicated names
-                                        foundName=line.substr(lastOneNW,i-lastOneNW);
-					
-                                        if(toReturn.namesMap.find(  foundName  ) !=  toReturn.namesMap.end()){
-                                            cerr<<"Warning: The sequence name is duplicated "<<foundName<<endl;
-                                            //exit(1);
-                                        }else{
-                                            toReturn.namesMap[ foundName ] = ""; 
-                                        }
-
-                                        toReturn.names.push_back( foundName );
-                                    }else{
-                                        //it's a comment for single index
-                                        toReturn.namesMap[ foundName ] +=  line.substr(lastOneNW,i-lastOneNW);
-                                        // cerr<<"Single index file cannot have 3 fields"<<endl;
-                                        // exit(1);
-                                    }
-                                }else{
-                                    //it's a comment again
-                                    toReturn.namesMap[ foundName ] +=  line.substr(lastOneNW,i-lastOneNW);
-				}
-
-			    }
-			    fieldIndex++;
+			if(inWS){
+			    numberOfFields++;
 			}
-			inWS=true;		    
-			
-		    }else{
-			if(inWS)
-			    lastOneNW=i;
 			inWS=false;			    
 		    }
-		    i++;		
-		} //ending while(i<line.length()){		
-	    }  // ending else firstline
+		    i++;
+		}
+		    
+		if(numberOfFields==2){ 
+		    toReturn.isDoubleIndex=false; 
+		}else{
+		    if(numberOfFields==3 || numberOfFields==5){
+			toReturn.isDoubleIndex=true; 
+		    }else{
+			cerr << "Must have 2, 3 or 5 fields"<<endl;
+			exit(1);
+		    }			
+		}
 
-	}  // ending while myFile.good() ){
-	myFile.close();
-    }else{ 
-	cerr << "Unable to open file "<<filename<<endl;
-	exit(1);
-    }
+	    }else{
+		cerr << "First line must begin with #"<<endl;
+		exit(1);
+	    }
+	    isFirstLine=false;
+	}else{
+	    int i=0;
+	    int fieldIndex=0;
+	    bool inWS=false;
+	    int lastOneNW=0;
+	    string foundName;
+
+	    while(i<int(line.length())){		
+		    
+		if( isspace(line[i]) && i==0){
+		    cerr<<line<<endl;
+		    cerr << "First character cannot be a space"<<endl;
+		    exit(1);
+		}
+	    
+		if( isspace(line[i]) ){			    
+		    if(!inWS){ //found a field
+
+			//first field, first index
+			if(fieldIndex==0){
+			    toReturn.indices1.push_back(toUpperCase(line.substr(lastOneNW,i-lastOneNW)));
+
+			    if(toReturn.mlindex1 < (i-lastOneNW)){
+				toReturn.mlindex1 =(i-lastOneNW);
+			    }
+
+			}else{
+			    //second field, either name of single ind or second index
+			    if(fieldIndex==1){
+				if(toReturn.isDoubleIndex){
+				    toReturn.indices2.push_back(toUpperCase(line.substr(lastOneNW,i-lastOneNW)));
+				    if(toReturn.mlindex2 < (i-lastOneNW)){
+					toReturn.mlindex2 =(i-lastOneNW);
+				    }
+				}else{
+				    foundName=line.substr(lastOneNW,i-lastOneNW);
+				    //duplicated names ?					
+				    if(toReturn.namesMap.find(  foundName  ) !=  toReturn.namesMap.end()){
+					cerr<<"Warning: The sequence name is duplicated "<<foundName<<endl;
+					//exit(1);
+				    }else{
+					toReturn.namesMap[ foundName ] = ""; 
+				    }
+
+				    toReturn.names.push_back( foundName );
+
+				}
+			    }else if(fieldIndex==2){
+				//sequence name when two indices
+				if(toReturn.isDoubleIndex){
+				    //duplicated names
+				    foundName=line.substr(lastOneNW,i-lastOneNW);
+					
+				    if(toReturn.namesMap.find(  foundName  ) !=  toReturn.namesMap.end()){
+					cerr<<"Warning: The sequence name is duplicated "<<foundName<<endl;
+					//exit(1);
+				    }else{
+					toReturn.namesMap[ foundName ] = ""; 
+				    }
+
+				    toReturn.names.push_back( foundName );
+				}else{
+				    //it's a comment for single index
+				    toReturn.namesMap[ foundName ] +=  line.substr(lastOneNW,i-lastOneNW);
+				    // cerr<<"Single index file cannot have 3 fields"<<endl;
+				    // exit(1);
+				}
+			    }else{
+				//it's a comment again
+				toReturn.namesMap[ foundName ] +=  line.substr(lastOneNW,i-lastOneNW);
+			    }
+
+			}
+			fieldIndex++;
+		    }
+		    inWS=true;		    
+			
+		}else{
+		    if(inWS)
+			lastOneNW=i;
+		    inWS=false;			    
+		}
+		i++;		
+	    } //ending while(i<line.length()){		
+	}  // ending else firstline
+
+    }  // ending while myFile.good() ){
+
+    // 	myFile.close();
+    // }else{ 
+    // 	cerr << "Unable to open file "<<filename<<endl;
+    // 	exit(1);
+    // }
+
+    // myFile.open(filename.c_str(), ios::in);
+    // if (myFile.is_open()){
+
+    // 	while ( getline (myFile,line)){
+    // 	    line+=' ';
+
+    // 	    if(isFirstLine){
+    // 		if(line[0] == '#'){
+    // 		    unsigned int i=0;
+    // 		    int numberOfFields=0;
+    // 		    bool inWS=true;
+    // 		    while(i<line.length()){			
+    // 			if( isspace(line[i])){			    
+    // 			    inWS=true;
+    // 			}else{
+    // 			    if(inWS){
+    // 				numberOfFields++;
+    // 			    }
+    // 			    inWS=false;			    
+    // 			}
+    // 			i++;
+    // 		    }
+		    
+    // 		    if(numberOfFields==2){ 
+    // 			toReturn.isDoubleIndex=false; 
+    // 		    }else{
+    // 			if(numberOfFields==3 || numberOfFields==5){
+    // 			    toReturn.isDoubleIndex=true; 
+    // 			}else{
+    // 			    cerr << "Must have 2, 3 or 5 fields"<<endl;
+    // 			    exit(1);
+    // 			}			
+    // 		    }
+
+    // 		}else{
+    // 		    cerr << "First line must begin with #"<<endl;
+    // 		    exit(1);
+    // 		}
+    // 		isFirstLine=false;
+    // 	    }else{
+    // 		int i=0;
+    // 		int fieldIndex=0;
+    // 		bool inWS=false;
+    // 		int lastOneNW=0;
+    // 		string foundName;
+    // 		while(i<int(line.length())){		
+		    
+    // 		    if( isspace(line[i]) && i==0){
+    // 			cerr<<line<<endl;
+    // 			cerr << "First character cannot be a space"<<endl;
+    // 			exit(1);
+    // 		    }			    
+    // 		    if( isspace(line[i]) ){			    
+    // 			if(!inWS){ //found a field
+
+    // 			    //first field, first index
+    // 			    if(fieldIndex==0){
+    // 				toReturn.indices1.push_back(toUpperCase(line.substr(lastOneNW,i-lastOneNW)));
+
+    // 				if(toReturn.mlindex1 < (i-lastOneNW)){
+    // 				    toReturn.mlindex1 =(i-lastOneNW);
+    // 				}
+
+    // 			    }else{
+    // 				//second field, either name of single ind or second index
+    // 				if(fieldIndex==1){
+    // 				    if(toReturn.isDoubleIndex){
+    // 					toReturn.indices2.push_back(toUpperCase(line.substr(lastOneNW,i-lastOneNW)));
+    // 					if(toReturn.mlindex2 < (i-lastOneNW)){
+    // 					    toReturn.mlindex2 =(i-lastOneNW);
+    // 					}
+    // 				    }else{
+    // 					foundName=line.substr(lastOneNW,i-lastOneNW);
+    // 					//duplicated names ?					
+    // 					if(toReturn.namesMap.find(  foundName  ) !=  toReturn.namesMap.end()){
+    // 					    cerr<<"Warning: The sequence name is duplicated "<<foundName<<endl;
+    // 					    //exit(1);
+    // 					}else{
+    // 					    toReturn.namesMap[ foundName ] = ""; 
+    // 					}
+
+    // 					toReturn.names.push_back( foundName );
+
+    // 				    }
+    //                             }else if(fieldIndex==2){
+    //                                 //sequence name when two indices
+    //                                 if(toReturn.isDoubleIndex){
+    //                                     //duplicated names
+    //                                     foundName=line.substr(lastOneNW,i-lastOneNW);
+					
+    //                                     if(toReturn.namesMap.find(  foundName  ) !=  toReturn.namesMap.end()){
+    //                                         cerr<<"Warning: The sequence name is duplicated "<<foundName<<endl;
+    //                                         //exit(1);
+    //                                     }else{
+    //                                         toReturn.namesMap[ foundName ] = ""; 
+    //                                     }
+
+    //                                     toReturn.names.push_back( foundName );
+    //                                 }else{
+    //                                     //it's a comment for single index
+    //                                     toReturn.namesMap[ foundName ] +=  line.substr(lastOneNW,i-lastOneNW);
+    //                                     // cerr<<"Single index file cannot have 3 fields"<<endl;
+    //                                     // exit(1);
+    //                                 }
+    //                             }else{
+    //                                 //it's a comment again
+    //                                 toReturn.namesMap[ foundName ] +=  line.substr(lastOneNW,i-lastOneNW);
+    // 				}
+
+    // 			    }
+    // 			    fieldIndex++;
+    // 			}
+    // 			inWS=true;		    
+			
+    // 		    }else{
+    // 			if(inWS)
+    // 			    lastOneNW=i;
+    // 			inWS=false;			    
+    // 		    }
+    // 		    i++;		
+    // 		} //ending while(i<line.length()){		
+    // 	    }  // ending else firstline
+
+    // 	}  // ending while myFile.good() ){
+    // 	myFile.close();
+    // }else{ 
+    // 	cerr << "Unable to open file "<<filename<<endl;
+    // 	exit(1);
+    // }
+
+
+
 
     //checking for size
     // cout<<toReturn.indices1.size()<<endl;

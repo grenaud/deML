@@ -47,6 +47,9 @@ PrefixTree<string> * trieKnownString;
 static string dashes = "--------------------------------";
 
 
+map<string,string> p7id2seq;
+map<string,string> p5id2seq;
+
 
 // XXX really, a global?!
 map<string,tallyForRG> namesMap; //a map name of RG to count of how many observed
@@ -297,6 +300,129 @@ void initializeKnownIndices(PrefixTree<string> * trieKnownString,string configFi
 }
 
 
+//todo
+//add fastq
+
+void readIndexNumbers(string configFile){
+
+
+    //p7 300
+    string line;
+    ifstream myFile;
+    string content="";
+    myFile.open(configFile.c_str(), ios::in);
+
+    if (myFile.is_open()){
+	while ( getline (myFile,line)){
+	    content+=line;
+	}
+	myFile.close();
+    }else{
+	cerr << "Unable to open config file "<<configFile<<endl;
+	exit(1);
+    }
+
+
+    JSONValue *value = JSON::Parse(content.c_str());
+    if (value == NULL){
+	cerr<<"Failed to parse JSON file"<<endl;
+	exit(1);
+    }
+
+    JSONObject root;
+    root = value->AsObject();
+    if(root.find(L"indices") == root.end()){
+	cerr<<"Failed to parse JSON file, needs a indices field"<<endl;
+	exit(1);
+    }
+    
+
+    JSONValue *jsonIndices    = root.at(L"indices");
+    JSONObject jsonIndicesObj = jsonIndices->AsObject();
+
+
+    //p7 indices
+    if(jsonIndicesObj.find(L"p7indices") == jsonIndicesObj.end()){
+	cerr<<"Failed to parse JSON file, needs a p7indices field"<<endl;
+	exit(1);
+    }
+        
+    JSONValue *jsonIndicesp7    = jsonIndicesObj.at(L"p7indices");
+    JSONObject jsonIndicesp7Obj = jsonIndicesp7->AsObject();
+    JSONArray arrayp7 = jsonIndicesp7Obj[L"p7index"]->AsArray();
+    for (unsigned int i = 0; i < arrayp7.size(); i++){
+	JSONObject temp=	arrayp7[i]->AsObject();
+	
+	if(temp.find(L"seq") == temp.end()){
+	    cerr<<"Failed to parse JSON file, needs a seq in the p7indices field"<<endl;
+	    exit(1);
+	}
+	if(temp.find(L"id") == temp.end()){
+	    cerr<<"Failed to parse JSON file, needs a id in the p7indices field"<<endl;
+	    exit(1);
+	}
+
+
+	string tempSeq (temp[L"seq"]->AsString().begin(),
+			temp[L"seq"]->AsString().end());
+	string tempID  (temp[L"id"]->AsString().begin(),
+			temp[L"id"]->AsString().end());
+	//cerr<<"p7 #"<<tempID<<"#\t#"<<tempSeq<<"#"<<endl;
+	if(p7id2seq.find(tempID) == p7id2seq.end()){
+	    p7id2seq[tempID] = tempSeq;
+	}else{
+	    cerr<<"Error while parsing JSON file, ID: "<<tempID<<" was found twice"<<endl;
+	    exit(1);
+	}
+	
+    }
+
+
+    //p5 indices
+    if(jsonIndicesObj.find(L"p5indices") == jsonIndicesObj.end()){
+	cerr<<"Failed to parse JSON file, needs a p5indices field"<<endl;
+	exit(1);
+    }
+        
+    JSONValue *jsonIndicesp5    = jsonIndicesObj.at(L"p5indices");
+    JSONObject jsonIndicesp5Obj = jsonIndicesp5->AsObject();
+    JSONArray arrayp5 = jsonIndicesp5Obj[L"p5index"]->AsArray();
+    for (unsigned int i = 0; i < arrayp5.size(); i++){
+	JSONObject temp=	arrayp5[i]->AsObject();
+	
+	if(temp.find(L"seq") == temp.end()){
+	    cerr<<"Failed to parse JSON file, needs a seq in the p5indices field"<<endl;
+	    exit(1);
+	}
+	if(temp.find(L"id") == temp.end()){
+	    cerr<<"Failed to parse JSON file, needs a id in the p5indices field"<<endl;
+	    exit(1);
+	}
+
+
+	string tempSeq (temp[L"seq"]->AsString().begin(),
+			temp[L"seq"]->AsString().end());
+	string tempID  (temp[L"id"]->AsString().begin(),
+			temp[L"id"]->AsString().end());
+
+	if(p5id2seq.find(tempID) == p5id2seq.end()){
+	    p5id2seq[tempID] = tempSeq;
+	}else{
+	    cerr<<"Error while parsing JSON file, ID: "<<tempID<<" was found twice"<<endl;
+	    exit(1);
+	}
+
+
+    }
+
+
+
+
+
+
+}
+
+
 void printUnfoundToFile(vector< pair<string,int> > * unfound,ofstream & fileError){
 
     for(int i=0;i<min(int(unfound->size()),maxErrorHits);i++){	       
@@ -462,7 +588,7 @@ int main (int argc, char *argv[]) {
 			      "\t\t"+"-i"+","+"--index"+"\t[index]"+"\t\t\t"+"File describing index sequences used"+"\n"+
 			      "\t\t"+"-o"+","+"--outfile"+"\t[outfile]"+"\t\t"+"Specify output file"+"\n"+
 			      "\t"+"\tOptional:"+"\n"+
-			      
+
 			      "\t\t"+"--maxerr"+"\t[max err]"+"\t\t"+""+"Print  # wrongly of assigned RG in the error log (--error) ["+stringify(maxErrorHits)+"] \n"+
                               "\t\t"+"-u" +"\t\t\t\t\t"           +"Produce uncompressed bam (good for pipe)"+"\n"+ 
 			      "\t\t"+"-s"+","+"--summary"+"\t[summary file]"+"\t\t"+"Summarize the RG tally in this file"+"\n"+
@@ -609,9 +735,13 @@ int main (int argc, char *argv[]) {
 
     if(printError){
 	trieKnownString = new PrefixTree<string>();
-	//cerr<<getCWD(argv[0])+"/../webForm/config.json"<<endl;
-	//	return 1;
+
+	if(!isFile( getCWD(argv[0])+"/../webForm/config.json" )){
+	    cerr<<"ERROR: file "<<(getCWD(argv[0])+"/../webForm/config.json")<<" was not found"<<endl;
+	    return 1;             
+	}
 	initializeKnownIndices(trieKnownString,getCWD(argv[0])+"/../webForm/config.json");
+
 	// //debug
 	// vector<string> * temp3=new vector<string>();
 	// vector<string> * temp4=new vector<string>();
@@ -627,9 +757,112 @@ int main (int argc, char *argv[]) {
     }
 
     bamFile=argv[argc-1];
+    ifstream myIndexFile;
+
+    string indexStringFile="";
+    bool firstLine=true;
+    bool fileContainsSeq=true;
+    bool fileContainsSeqDouble=false;
+
+    myIndexFile.open(index.c_str(), ios::in);
+    if (myIndexFile.is_open()){
+	string line;
+	while ( getline (myIndexFile,line)){
+	    indexStringFile+=line+"\n";
+
+	    if(firstLine){
+		firstLine=false;
+	    }else{
+		vector<string> tempf = splitWS(line);
+		if(isStringNatNumber(tempf[1]) || 
+		   isStringNatNumber("t"+tempf[1])){ //for truseq
+		    fileContainsSeq=false;
+		    if(tempf.size() == 2){
+			fileContainsSeqDouble=false;
+		    }else{
+			if(tempf.size() == 3){
+			    fileContainsSeqDouble=true;
+			}else{
+			    cerr << "Error: line "<<line<<" does not have 2 or 3 fields"<<endl;
+			    exit(1);
+			}
+
+		    }
+		}
+	    }
+	}
+	myIndexFile.close();
+    }else{ 
+	cerr << "Unable to open file "<<index<<endl;
+	exit(1);
+    }
 
 
-    map<string,string> rgs =readIndexFile(index,mismatchesTrie,shiftByOne);
+    //
+    //  Processing index with numbers
+    //
+    if(!fileContainsSeq){
+	readIndexNumbers( getCWD(argv[0])+"/../webForm/config.json" );	
+
+	firstLine=true;
+	vector<string> allLinesIndexFile = allTokens(indexStringFile,'\n');
+	string tempIndexStringFile="";
+	//while ( getline (myFile,line)){
+	for(unsigned int i=0;i<allLinesIndexFile.size();i++){
+	    string line = allLinesIndexFile[i];
+	    if(line.empty())
+		continue;
+	    vector<string> tempf = splitWS(line);
+
+	    if( ((tempf.size() == 2) && !fileContainsSeqDouble) || 
+		((tempf.size() == 3) && fileContainsSeqDouble) ){
+	    }else{
+		cerr << "Error: line "<<line<<" does not have 2 or 3 fields"<<endl;
+		exit(1);
+	    }
+
+	    if(firstLine){
+		tempIndexStringFile += line;
+		firstLine=false;
+	    }else{
+
+		if(p7id2seq.find(tempf[0]) != p7id2seq.end()){
+		    tempIndexStringFile +=  p7id2seq[ tempf[0] ] ;
+		}else{
+		    cerr<<"Error p7 ID: #"<<tempf[0]<<"# not found"<<endl;
+		    exit(1);
+		}
+	    
+		if(fileContainsSeqDouble){
+
+		    if(p5id2seq.find(tempf[1]) != p5id2seq.end()){
+			tempIndexStringFile +=  "\t"+p5id2seq[ tempf[1] ] ;
+		    }else{
+			cerr<<"Error p5 ID: #"<<tempf[1]<<"# not found"<<endl;
+			//cerr<<"Error while parsing JSON file, ID: "<<tempID<<" was found twice"<<endl;
+			exit(1);
+		    }
+		
+		    tempIndexStringFile +=  "\t"+tempf[2]  ;
+		}else{
+		    tempIndexStringFile +=  "\t"+tempf[1]  ;
+		}
+	    }
+	    
+	    tempIndexStringFile +=  "\n";
+	    //cerr<<"temp "<<tempIndexStringFile<<endl;
+	}//for all lines
+	
+	indexStringFile=tempIndexStringFile;
+	cerr<<"Using the following as index sequences"<<endl;
+	cerr<<"----------------------------------"<<endl;
+	cerr<<indexStringFile<<endl;
+	cerr<<"----------------------------------"<<endl;
+    }//end file contains seq
+
+
+
+    map<string,string> rgs =readIndexFile(indexStringFile,mismatchesTrie,shiftByOne);
 
     map<string,int> unknownSeq;
     map<string,int> wrongSeq;
