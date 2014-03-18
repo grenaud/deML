@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sstream>
 #include <map>
+#include <gzstream.h>
 
 
 #include <api/SamHeader.h>
@@ -14,14 +15,30 @@
 #include <api/BamAux.h>
 #include "RGAssign.h"
 #include "PutProgramInHeader.h"
+#include "FastQParser.h"
+
+
 
 #include "JSON.h"
-
 #include "utils.h"
 
 using namespace std;
 using namespace BamTools;
 
+typedef struct { 
+
+    ogzstream pairr1;
+    ogzstream pairr2;
+    ogzstream pairi1;
+    ogzstream pairi2;
+
+    ogzstream pairr1f;
+    ogzstream pairr2f;
+    ogzstream pairi1f;
+    ogzstream pairi2f;
+
+
+} fqwriters;
 
 /****************************************/
 /*                                      */
@@ -106,6 +123,7 @@ static void getIndices( const BamAlignment &al,string & index1,string & index1Q,
 	cerr << "Cannot retrieve XI field  "<<al.Name << endl;
 	exit(1); 
     }
+
     if(!al.GetTag("YI",index1Q)){ 	
 	cerr << "Cannot retrieve YI field  "<<al.Name << endl;
 	exit(1); 
@@ -115,9 +133,9 @@ static void getIndices( const BamAlignment &al,string & index1,string & index1Q,
         index2 ="";
         index2Q="";
     }
-    else if(!al.GetTag("YJ",index2Q)) {
-	    cerr << "Cannot retrieve YJ field  "<<al.Name << endl;
-	    exit(1); 
+    else if(!al.GetTag("YJ",index2Q)) { //we got XJ, double indexed
+	cerr << "Cannot retrieve YJ field  "<<al.Name << endl;
+	exit(1); 
     }
 }
 
@@ -544,6 +562,240 @@ void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writ
     }
 }
 
+
+
+void processFastq(string forwardfq,
+		  string reversefq,
+		  string index1fq,
+		  string index2fq,
+		  string prefixOut){
+    
+    FastQParser * fqpf=0;
+    FastQParser * fqpr=0;
+    FastQParser * fqpi1=0;
+    FastQParser * fqpi2=0;
+
+    map<string,fqwriters *> rg2FqWriters;
+    
+    
+    fqpf  = new FastQParser (forwardfq);
+    fqpi1 = new FastQParser (index1fq);
+
+    bool hasRevBool = (!reversefq.empty());
+    bool hasId2Bool = (!index2fq.empty());
+
+
+    if(hasRevBool)
+	fqpr  = new FastQParser (reversefq);
+
+    if(hasId2Bool)	
+	fqpi2 = new FastQParser (index2fq);
+
+    unsigned int totalSeqs=0;
+
+    while(fqpf->hasData()){
+	FastQObj * ffo=fqpf->getData();
+	FastQObj * rfo=0;
+	FastQObj * i1fo;
+	FastQObj * i2fo=0;
+
+	string index1s;
+	string index2s;
+
+	string index1q;
+	string index2q;
+
+	vector<string> deff=allTokens( *(ffo->getID()), ' '  );
+	string deffs=deff[0];
+	//cerr<<deffs<<endl;
+
+	if(!fqpi1->hasData()){
+	    cerr << "ERROR: Discrepency between fastq files at record with first index " <<  *(ffo->getID()) <<endl;
+	    exit(1);
+	}
+	
+	i1fo= fqpi1->getData();
+
+	if(strEndsWith(deffs,  "/1")){
+	    deffs=deffs.substr(0,deffs.size()-2);
+	}
+	
+	// if(strBeginsWith(deffs,"@")){
+	//     deffs=deffs.substr(1,deffs.size()-1);
+	// }
+
+
+	if( (deffs != *(i1fo->getID()) ) ){
+	    cerr << "ERROR: Discrepency between fastq files, different names with first index " <<deffs <<" and "<< *(i1fo->getID()) <<endl;
+	    exit(1);
+	}
+	
+	index1s =  *(i1fo->getSeq());
+	index1q =  *(i1fo->getQual());
+
+
+	if(hasId2Bool){
+	    if(!fqpi2->hasData()){
+		cerr << "ERROR: Discrepency between fastq files at record with second index " <<  *(ffo->getID()) <<endl;
+		exit(1);
+	    }
+	    
+	    i2fo=fqpi2->getData();
+	    
+	    if( (deffs != *(i2fo->getID()) ) ){
+		cerr << "ERROR: Discrepency between fastq files, different names with second index " <<deffs <<" and "<< *(i1fo->getID()) <<endl;
+		exit(1);
+	    }
+
+	    index2s =  *(i2fo->getSeq());
+	    index2q =  *(i2fo->getQual());
+	}
+
+	if(hasRevBool){
+	    if(!fqpr->hasData()){
+		cerr << "ERROR: Discrepency between fastq files at record with second read " <<  *(ffo->getID()) <<endl;
+		exit(1);
+	    }
+
+	    rfo=fqpr->getData();
+
+	    vector<string> defr=allTokens( *(rfo->getID()), ' '  );
+	    string defrs=defr[0];
+	    
+
+	    if(strEndsWith(defrs,  "/2")){
+		defrs=defrs.substr(0,defrs.size()-2);
+	    }
+	    
+	    // if(strBeginsWith(defrs,"@")){
+	    // 	defrs=deffs.substr(1,defrs.size()-1);
+	    // }
+
+
+	    if( (deffs != defrs) ){
+		cerr << "ERROR: Discrepency between fastq files, different names " <<deffs <<" and "<< defrs <<endl;
+		exit(1);
+	    }
+
+	}
+
+	
+	rgAssignment rgReturn = assignReadGroup(index1s,index1q,index2s,index2q,rgScoreCutoff,fracConflict,mismatchesTrie);
+	check_thresholds( rgReturn ) ;
+	string predictedGroup;
+	
+	if( rgReturn.predictedGroup.empty() ) {
+	    predictedGroup="unknown";
+	}else{
+	    predictedGroup = rgReturn.predictedGroup;
+	}
+	
+	if(rg2FqWriters.find(predictedGroup) == rg2FqWriters.end()){ //new
+	    rg2FqWriters[predictedGroup] = new fqwriters();
+
+	    string outpairr1   = prefixOut+"_"+predictedGroup+"_"+"r1.fq.gz";
+	    string outpairr2   = prefixOut+"_"+predictedGroup+"_"+"r2.fq.gz";
+	    string outpairi1   = prefixOut+"_"+predictedGroup+"_"+"i1.fq.gz";
+	    string outpairi2   = prefixOut+"_"+predictedGroup+"_"+"i2.fq.gz";
+
+	    string outpairr1f   = prefixOut+"_"+predictedGroup+"_"+"r1.fail.fq.gz";
+	    string outpairr2f   = prefixOut+"_"+predictedGroup+"_"+"r2.fail.fq.gz";
+	    string outpairi1f   = prefixOut+"_"+predictedGroup+"_"+"i1.fail.fq.gz";
+	    string outpairi2f   = prefixOut+"_"+predictedGroup+"_"+"i2.fail.fq.gz";
+
+	    rg2FqWriters[predictedGroup]->pairr1.open( outpairr1.c_str(),  ios::out);
+	    rg2FqWriters[predictedGroup]->pairr1f.open(outpairr1f.c_str(), ios::out);
+
+	    rg2FqWriters[predictedGroup]->pairi1.open( outpairi1.c_str(),  ios::out);
+	    rg2FqWriters[predictedGroup]->pairi1f.open(outpairi1f.c_str(), ios::out);
+
+	    if(hasId2Bool){
+		rg2FqWriters[predictedGroup]->pairi2.open( outpairi2.c_str(),  ios::out);
+		rg2FqWriters[predictedGroup]->pairi2f.open(outpairi2f.c_str(), ios::out);
+	    }
+
+	    if(hasRevBool){
+		rg2FqWriters[predictedGroup]->pairr2.open( outpairr2.c_str(),  ios::out);
+		rg2FqWriters[predictedGroup]->pairr2f.open(outpairr2f.c_str(), ios::out);	   
+	    }
+	}//end new rg
+	 
+
+	if(rgReturn.conflict  || rgReturn.wrong || rgReturn.unknown ){
+
+	    rg2FqWriters[predictedGroup]->pairr1f     << *(ffo) <<endl;
+	    rg2FqWriters[predictedGroup]->pairi1f     << *(i1fo)<<endl;
+	    if(hasId2Bool){
+		rg2FqWriters[predictedGroup]->pairi2f << *(i2fo)<<endl;
+	    }
+	    
+	    if(hasRevBool){
+		rg2FqWriters[predictedGroup]->pairr2f << *(rfo)<<endl;
+	    }	    
+
+	}else{
+	    rg2FqWriters[predictedGroup]->pairr1     << *(ffo)<<endl;
+	    rg2FqWriters[predictedGroup]->pairi1     << *(i1fo)<<endl;
+	    if(hasId2Bool){
+		rg2FqWriters[predictedGroup]->pairi2 << *(i2fo)<<endl;
+	    }
+	    
+	    if(hasRevBool){
+		rg2FqWriters[predictedGroup]->pairr2 << *(rfo)<<endl;
+	    }	    
+	}
+
+
+
+	    //onereadgroup.pairr1<<"@"<<def1s<<"/2" <<endl <<*(fo1->getSeq())<<endl<<"+"<<endl <<*(fo1->getID())<<endl;
+			
+
+
+	// 	rg.predictedGroup
+	// if( rg.conflict ){ zq += 'C' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].conflict++; incrInTally=true;}  }
+	// if( rg.wrong    ){ zq += 'W' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].wrong++;    incrInTally=true;}  }
+	// if( rg.unknown  ){ zq += 'I' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].unknown++;  incrInTally=true;}  }
+
+	
+	
+    totalSeqs++;
+    }//end each record in fqpf
+    
+    //map<string,fqwriters *>::iterator rg2FqwritersIt;
+    vector<string> allRgsFound  = allKeysMap(rg2FqWriters);
+    for (unsigned int i=0; i<allRgsFound.size();i++){
+	string rgTag = allRgsFound[i];
+
+	rg2FqWriters[rgTag]->pairr1.close( );
+	rg2FqWriters[rgTag]->pairr1f.close();
+	
+	rg2FqWriters[rgTag]->pairi1.close( );
+	rg2FqWriters[rgTag]->pairi1f.close();
+	
+	if(hasId2Bool){
+	    rg2FqWriters[rgTag]->pairi2.close( );
+	    rg2FqWriters[rgTag]->pairi2f.close();
+	}
+	
+	if(hasRevBool){
+	    rg2FqWriters[rgTag]->pairr2.close( );
+	    rg2FqWriters[rgTag]->pairr2f.close();	   
+	}
+    }
+    
+    delete fqpf;
+    delete fqpi1;
+ 
+   if(hasId2Bool)
+	delete fqpi2;
+
+    if(hasRevBool)
+	delete fqpr;
+
+}
+
+
+
 int main (int argc, char *argv[]) {
 
     BamReader reader;
@@ -567,11 +819,30 @@ int main (int argc, char *argv[]) {
     bool rgqualFlag      = false;
     bool shiftByOne      = false;
 
+    bool useFastq=false;
+    string forwardfq;
+    string reversefq;
+    string index1fq;
+    string index2fq;
 
     bool produceUnCompressedBAM=false; 
+
     const string usage=string(string(argv[0])+
 			      " [options] BAMfile"+"\n\n"+
 
+			      "\t"+"Mandatory parameters:"+"\n"+
+			      "\t\t"+"-i"+","+"--index"+"\t[index]"+"\t\t\t"+"File describing index sequences used"+"\n"+
+			      "\t\t"+"-o"+","+"--outfile"+"\t[outfile]"+"\t\t"+"Specify output file"+"\n\n"+
+
+			      "\t"+"Fastq input/output (optional):"+"\n"+
+			      "\t\t"+"You can specify fastq as input/output, in which case the -o option will be"+"\n"+
+			      "\t\t"+"treated as an output prefix"+"\n"+
+			      
+			      "\t\t"+"-f"  +"\t[forward fastq]"+"\t\t"+""+"Forward reads in fastq\n"+
+			      "\t\t"+"-r"  +"\t[reverse fastq]"+"\t\t"+""+"Reverse reads in fastq\n"+
+			      "\t\t"+"-if1"  +"\t[index1 file fastq]"+"\t\t"+""+"First index sequences in fastq\n"+
+			      "\t\t"+"-if2"  +"\t[index2 file fastq]"+"\t\t"+""+"Second index sequences in fastq\n"+
+			      
 			      "\tCutoffs options:"+"\n"
 			      "\t\t"+"--rgqual"  +"\t[quality]"+"\t\t"+""+"Worst quality before flagging as unknown ["+stringify(rgScoreCutoff)+"]\n"+
 			      "\t\t"+"--fracconf"+"\t[quality]"+"\t\t"+""+"Maximum quality difference considered a conflict ["+stringify(fracConflict)+"] \n"+
@@ -581,14 +852,9 @@ int main (int argc, char *argv[]) {
 			      "\n\tRG assignment options:"+"\n"+
 			      "\t\t"+"" +""+"--shift"+"\t"+"\t\t\t\t"+"Try shifting the index right by one at the cost of a mismatch"+"\n"+
 
-
-			      "\n\tOutput options:"+"\n"+
 			      
-			      "\t"+"\tMandatory:"+"\n"+
-			      "\t\t"+"-i"+","+"--index"+"\t[index]"+"\t\t\t"+"File describing index sequences used"+"\n"+
-			      "\t\t"+"-o"+","+"--outfile"+"\t[outfile]"+"\t\t"+"Specify output file"+"\n"+
-			      "\t"+"\tOptional:"+"\n"+
-
+			      //"\t"+"\tOptional:"+"\n"+
+			      "\n\tOutput options:"+"\n"+
 			      "\t\t"+"--maxerr"+"\t[max err]"+"\t\t"+""+"Print  # wrongly of assigned RG in the error log (--error) ["+stringify(maxErrorHits)+"] \n"+
                               "\t\t"+"-u" +"\t\t\t\t\t"           +"Produce uncompressed bam (good for pipe)"+"\n"+ 
 			      "\t\t"+"-s"+","+"--summary"+"\t[summary file]"+"\t\t"+"Summarize the RG tally in this file"+"\n"+
@@ -609,8 +875,41 @@ int main (int argc, char *argv[]) {
     	return 1;
     }
 
-    for(int i=1;i<(argc-1);i++){
+    int lastIndexArgc = argc-1;
+    for(int i=1;i<(lastIndexArgc);i++){ //all but the last
+	
+	if(strcmp(argv[i],"-f") == 0 ){
+	    forwardfq = string(argv[i+1]);
+	    useFastq=true;
+	    lastIndexArgc = argc;
+	    i++;
+	    continue;
+	}
 
+	if(strcmp(argv[i],"-r") == 0 ){
+	    reversefq = string(argv[i+1]);
+	    useFastq=true;
+	    lastIndexArgc = argc;
+	    i++;
+	    continue;
+	}
+
+	if(strcmp(argv[i],"-if1") == 0 ){
+	    index1fq = string(argv[i+1]);
+	    useFastq=true;
+	    lastIndexArgc = argc;
+	    i++;
+	    continue;
+	}
+
+	if(strcmp(argv[i],"-if2") == 0 ){
+	    index2fq = string(argv[i+1]);
+	    useFastq=true;
+	    lastIndexArgc = argc;
+	    i++;
+	    continue;
+	}
+	
 
 	if(strcmp(argv[i],"--shift") == 0 ){
 	    shiftByOne      = true;
@@ -723,6 +1022,29 @@ int main (int argc, char *argv[]) {
 	return 1;             
     }
 
+
+
+    if(useFastq){
+
+	if(forwardfq.empty() ){
+	    cerr<<"If fastq is used, the forward read must be specified"<<endl;
+	    return 1;             
+	}
+
+	if(index1fq.empty() ){
+	    cerr<<"If fastq is used, the forward read must be specified"<<endl;
+	    return 1;             
+	}
+
+	if(produceUnCompressedBAM){
+	    cerr<<"If fastq is used, cannot use -u flag"<<endl;
+	    return 1;             
+	}
+	
+    }
+    
+    
+    
     if(outfile.size() == 0){
 	cerr<<"The field -o is mandatory exiting"<<endl;
 	return 1;             
@@ -759,6 +1081,10 @@ int main (int argc, char *argv[]) {
     bamFile=argv[argc-1];
     ifstream myIndexFile;
 
+
+    //
+    //  BEGIN : reading index file
+    //    
     string indexStringFile="";
     bool firstLine=true;
     bool fileContainsSeq=true;
@@ -796,10 +1122,13 @@ int main (int argc, char *argv[]) {
 	cerr << "Unable to open file "<<index<<endl;
 	exit(1);
     }
+    //
+    //  END : reading index file
+    //    
 
 
     //
-    //  Processing index with numbers
+    //  BEGIN : Processing index with numbers
     //
     if(!fileContainsSeq){
 	readIndexNumbers( getCWD(argv[0])+"/../webForm/config.json" );	
@@ -859,185 +1188,198 @@ int main (int argc, char *argv[]) {
 	cerr<<indexStringFile<<endl;
 	cerr<<"----------------------------------"<<endl;
     }//end file contains seq
+    //
+    //  END : Processing index with numbers
+    //
 
 
 
     map<string,string> rgs =readIndexFile(indexStringFile,mismatchesTrie,shiftByOne);
 
-    map<string,int> unknownSeq;
-    map<string,int> wrongSeq;
-    map<string,int> conflictSeq;
+    if(useFastq){
+	
+	processFastq(forwardfq,
+		     reversefq,
+		     index1fq,
+		     index2fq,
+		     outfile);
 
-    if ( !reader.Open(bamFile) ) {
-    	cerr << "Could not open input BAM file  "<<bamFile << endl;
-    	return 1;
-    }
+    }else{
 
-    SamHeader  myHeader=reader.GetHeader();
-    SamProgram sp;
-   
-    string pID          = "assignRG";   
-    string pName        = "assignRG";   
-    string pCommandLine = "";
-    for(int i=0;i<(argc);i++){
-	pCommandLine += (string(argv[i])+" ");
-    }
+	map<string,int> unknownSeq;
+	map<string,int> wrongSeq;
+	map<string,int> conflictSeq;
 
-    putProgramInHeader(&myHeader,pID,pName,pCommandLine,returnGitHubVersion(string(argv[0]),".."));
-
-    SamReadGroupDictionary  srgd;
-    map<string,string>::const_iterator itRG;   
-    for ( itRG=rgs.begin(); itRG != rgs.end(); itRG++ ){
-	SamReadGroup srg ( itRG->first );	
-	srg.Description  = itRG->second; //description read in index file
-	srgd.Add( srg );       	
-
-	namesMap[ itRG->first ].assigned =0;
-	namesMap[ itRG->first ].unknown  =0;
-	namesMap[ itRG->first ].conflict =0;
-	namesMap[ itRG->first ].wrong    =0;
-
-
-	if(itRG->first == "conflict" || itRG->first == "unknown" || itRG->first == "wrong" ){
-	    cerr<<"ERROR: The RG names cannot contain the words: \"conflict\" or \"unknown\" or \"wrong\""<<endl;
+	if ( !reader.Open(bamFile) ) {
+	    cerr << "Could not open input BAM file  "<<bamFile << endl;
 	    return 1;
 	}
-    }
 
-    namesMap[ "unknown" ].assigned=0;
-    namesMap[ "unknown" ].unknown=0;
-    namesMap[ "unknown" ].conflict=0;
-    namesMap[ "unknown" ].wrong=0;
-
-
-
-    myHeader.ReadGroups=srgd;
-    if(produceUnCompressedBAM)  
-	writer.SetCompressionMode(BamWriter::Uncompressed); 
-
-    if( !writer.Open(outfile,myHeader,reader.GetReferenceData() ) ) {
-    	cerr << "Could not open output BAM file  "<<outfile << endl;
-    	return 1;	
-    }
-
-
-    BamAlignment al;
-    BamAlignment al2;
-
-    // damn, this logic is convoluted...
-    while( reader.GetNextAlignment(al) ) {
-	while(1) {
-            if( !reader.GetNextAlignment(al2) ) {
-                // EOF, process the one leftover record
-                processSingleEndReads(al,writer,printError,unknownSeq,wrongSeq,conflictSeq);
-                break; 
-            }
-            // If it's paired, both should have the same index, and we
-            // save some work.  Since the reads are probably not
-            // ordered, check the names first
-            if( al.IsPaired() && al.Name == al2.Name ) {
-                processPairedEndReads(al,al2,writer,printError,unknownSeq,wrongSeq,conflictSeq);
-                break ;
-            } else {
-                // no match, treat one(!) separately
-                processSingleEndReads(al ,writer,printError,unknownSeq,wrongSeq,conflictSeq);
-                swap(al,al2) ;
-            }
-        }
-    }
-
-    reader.Close();
-    writer.Close();
-
-
-
-
-    //Print summary of RG assignment
-    if(printSummary){
-     	map<string,tallyForRG>::iterator it;   
-	unsigned int totalRG=0;	
-	unsigned int totalAssignRG=0;	
-
-	vector< pair<string,tallyForRG> > toprintVec;
-	for ( it=namesMap.begin() ; it != namesMap.end(); it++ ){
-	    toprintVec.push_back(  make_pair( it->first , it->second ) );
-	    totalRG+=it->second.assigned+it->second.unknown+it->second.conflict+it->second.wrong;
+	SamHeader  myHeader=reader.GetHeader();
+	SamProgram sp;
+   
+	string pID          = "assignRG";   
+	string pName        = "assignRG";   
+	string pCommandLine = "";
+	for(int i=0;i<(argc);i++){
+	    pCommandLine += (string(argv[i])+" ");
 	}
 
-	sort (toprintVec.begin(),   toprintVec.end(),   compareNameTally() ); 
-	ofstream fileSummary;
-	fileSummary.open(filenameSummary.c_str());
+	putProgramInHeader(&myHeader,pID,pName,pCommandLine,returnGitHubVersion(string(argv[0]),".."));
 
-	if (fileSummary.is_open()){
+	SamReadGroupDictionary  srgd;
+	map<string,string>::const_iterator itRG;   
+	for ( itRG=rgs.begin(); itRG != rgs.end(); itRG++ ){
+	    SamReadGroup srg ( itRG->first );	
+	    srg.Description  = itRG->second; //description read in index file
+	    srgd.Add( srg );       	
 
-	    fileSummary << "RG\ttotal\ttotal%\tassigned\tassigned%\tunknown\tunknown%\tconflict\tconflict%\twrong\twrong%"<<endl;
-	    fileSummary<<dashes<<endl;
-	    for(unsigned int i=0;i<toprintVec.size();i++){		
-		unsigned int totalForRQ=toprintVec[i].second.assigned+toprintVec[i].second.unknown+toprintVec[i].second.conflict+toprintVec[i].second.wrong;
+	    namesMap[ itRG->first ].assigned =0;
+	    namesMap[ itRG->first ].unknown  =0;
+	    namesMap[ itRG->first ].conflict =0;
+	    namesMap[ itRG->first ].wrong    =0;
 
-		fileSummary << toprintVec[i].first << "\t" << totalForRQ << "\t"
-                            << 100.0*double(totalForRQ)/double(totalRG) << "%\t" ;
 
-		fileSummary  << toprintVec[i].second.assigned << "\t"
-                            << 100.0*double(toprintVec[i].second.assigned)/double(totalForRQ) << "%\t" ;
+	    if(itRG->first == "conflict" || itRG->first == "unknown" || itRG->first == "wrong" ){
+		cerr<<"ERROR: The RG names cannot contain the words: \"conflict\" or \"unknown\" or \"wrong\""<<endl;
+		return 1;
+	    }
+	}
 
-		fileSummary  << toprintVec[i].second.unknown << "\t"
-                            << 100.0*double(toprintVec[i].second.unknown)/double(totalForRQ) << "%\t" ;
+	namesMap[ "unknown" ].assigned=0;
+	namesMap[ "unknown" ].unknown=0;
+	namesMap[ "unknown" ].conflict=0;
+	namesMap[ "unknown" ].wrong=0;
 
-		fileSummary <<  toprintVec[i].second.conflict << "\t"
-                            << 100.0*double(toprintVec[i].second.conflict)/double(totalForRQ) << "%\t" ;
 
-		fileSummary <<  toprintVec[i].second.wrong << "\t"
-                            << 100.0*double(toprintVec[i].second.wrong)/double(totalForRQ) << "%\n" ;
-		
-		 if(toprintVec[i].first != "unknown" )
-		     totalAssignRG+=toprintVec[i].second.assigned;
+
+	myHeader.ReadGroups=srgd;
+	if(produceUnCompressedBAM)  
+	    writer.SetCompressionMode(BamWriter::Uncompressed); 
+
+	if( !writer.Open(outfile,myHeader,reader.GetReferenceData() ) ) {
+	    cerr << "Could not open output BAM file  "<<outfile << endl;
+	    return 1;	
+	}
+
+
+	BamAlignment al;
+	BamAlignment al2;
+
+	// damn, this logic is convoluted...
+	while( reader.GetNextAlignment(al) ) {
+	    while(1) {
+		if( !reader.GetNextAlignment(al2) ) {
+		    // EOF, process the one leftover record
+		    processSingleEndReads(al,writer,printError,unknownSeq,wrongSeq,conflictSeq);
+		    break; 
+		}
+		// If it's paired, both should have the same index, and we
+		// save some work.  Since the reads are probably not
+		// ordered, check the names first
+		if( al.IsPaired() && al.Name == al2.Name ) {
+		    processPairedEndReads(al,al2,writer,printError,unknownSeq,wrongSeq,conflictSeq);
+		    break ;
+		} else {
+		    // no match, treat one(!) separately
+		    processSingleEndReads(al ,writer,printError,unknownSeq,wrongSeq,conflictSeq);
+		    swap(al,al2) ;
+		}
+	    }
+	}
+
+	reader.Close();
+	writer.Close();
+
+
+
+
+	//Print summary of RG assignment
+	if(printSummary){
+	    map<string,tallyForRG>::iterator it;   
+	    unsigned int totalRG=0;	
+	    unsigned int totalAssignRG=0;	
+
+	    vector< pair<string,tallyForRG> > toprintVec;
+	    for ( it=namesMap.begin() ; it != namesMap.end(); it++ ){
+		toprintVec.push_back(  make_pair( it->first , it->second ) );
+		totalRG+=it->second.assigned+it->second.unknown+it->second.conflict+it->second.wrong;
 	    }
 
-	    fileSummary<<dashes<<endl;
-	    fileSummary<<"ASSIGNED:\t"<< totalAssignRG<<"\t"<<100.0*double(totalAssignRG)/double(totalRG)<<"%"<<endl;
-	    fileSummary<<"PROBLEMS:\t"<< (totalRG-totalAssignRG)<<"\t"<<100.0*double(totalRG-totalAssignRG)/double(totalRG)<<"%"<<endl;
+	    sort (toprintVec.begin(),   toprintVec.end(),   compareNameTally() ); 
+	    ofstream fileSummary;
+	    fileSummary.open(filenameSummary.c_str());
 
-	    fileSummary<<"TOTAL:\t"<<totalRG<<"\t100.0%"<<endl;
-	}else{
-	    cerr << "Unable to print to file "<<filenameSummary<<endl;
+	    if (fileSummary.is_open()){
+
+		fileSummary << "RG\ttotal\ttotal%\tassigned\tassigned%\tunknown\tunknown%\tconflict\tconflict%\twrong\twrong%"<<endl;
+		fileSummary<<dashes<<endl;
+		for(unsigned int i=0;i<toprintVec.size();i++){		
+		    unsigned int totalForRQ=toprintVec[i].second.assigned+toprintVec[i].second.unknown+toprintVec[i].second.conflict+toprintVec[i].second.wrong;
+
+		    fileSummary << toprintVec[i].first << "\t" << totalForRQ << "\t"
+				<< 100.0*double(totalForRQ)/double(totalRG) << "%\t" ;
+
+		    fileSummary  << toprintVec[i].second.assigned << "\t"
+				 << 100.0*double(toprintVec[i].second.assigned)/double(totalForRQ) << "%\t" ;
+
+		    fileSummary  << toprintVec[i].second.unknown << "\t"
+				 << 100.0*double(toprintVec[i].second.unknown)/double(totalForRQ) << "%\t" ;
+
+		    fileSummary <<  toprintVec[i].second.conflict << "\t"
+				<< 100.0*double(toprintVec[i].second.conflict)/double(totalForRQ) << "%\t" ;
+
+		    fileSummary <<  toprintVec[i].second.wrong << "\t"
+				<< 100.0*double(toprintVec[i].second.wrong)/double(totalForRQ) << "%\n" ;
+		
+		    if(toprintVec[i].first != "unknown" )
+			totalAssignRG+=toprintVec[i].second.assigned;
+		}
+
+		fileSummary<<dashes<<endl;
+		fileSummary<<"ASSIGNED:\t"<< totalAssignRG<<"\t"<<100.0*double(totalAssignRG)/double(totalRG)<<"%"<<endl;
+		fileSummary<<"PROBLEMS:\t"<< (totalRG-totalAssignRG)<<"\t"<<100.0*double(totalRG-totalAssignRG)/double(totalRG)<<"%"<<endl;
+
+		fileSummary<<"TOTAL:\t"<<totalRG<<"\t100.0%"<<endl;
+	    }else{
+		cerr << "Unable to print to file "<<filenameSummary<<endl;
+	    }
+	    fileSummary.close();
 	}
-	fileSummary.close();
-    }
 
 
 
 
-    //Print over-represented sequences in conflict,unknown,wrong
-    if(printError){
-	vector< pair<string,int> > conflictToPrint( conflictSeq.begin(), conflictSeq.end() ) ;
-	vector< pair<string,int> > unknownToPrint(  unknownSeq.begin(),  unknownSeq.end() ) ;
-	vector< pair<string,int> > wrongToPrint(    wrongSeq.begin(),    wrongSeq.end() ) ;
+	//Print over-represented sequences in conflict,unknown,wrong
+	if(printError){
+	    vector< pair<string,int> > conflictToPrint( conflictSeq.begin(), conflictSeq.end() ) ;
+	    vector< pair<string,int> > unknownToPrint(  unknownSeq.begin(),  unknownSeq.end() ) ;
+	    vector< pair<string,int> > wrongToPrint(    wrongSeq.begin(),    wrongSeq.end() ) ;
      	
-	sort (conflictToPrint.begin(),   conflictToPrint.end(),   compareNameRG() ); 
-	sort (unknownToPrint.begin(),    unknownToPrint.end(),    compareNameRG() ); 
-	sort (wrongToPrint.begin(),      wrongToPrint.end(),      compareNameRG() ); 
+	    sort (conflictToPrint.begin(),   conflictToPrint.end(),   compareNameRG() ); 
+	    sort (unknownToPrint.begin(),    unknownToPrint.end(),    compareNameRG() ); 
+	    sort (wrongToPrint.begin(),      wrongToPrint.end(),      compareNameRG() ); 
 
-	ofstream fileError;
-	fileError.open(filenameError.c_str());
-	if (fileError.is_open())
-        {
-	    fileError<<      dashes<<endl<<"Conflict:"<<endl<<dashes<<endl;
-	    printUnfoundToFile(&conflictToPrint,fileError);
+	    ofstream fileError;
+	    fileError.open(filenameError.c_str());
+	    if (fileError.is_open())
+		{
+		    fileError<<      dashes<<endl<<"Conflict:"<<endl<<dashes<<endl;
+		    printUnfoundToFile(&conflictToPrint,fileError);
 
-	    fileError<<endl<<dashes<<endl<<"Unknown:" <<endl<<dashes<<endl;
-	    printUnfoundToFile(&unknownToPrint,fileError);
+		    fileError<<endl<<dashes<<endl<<"Unknown:" <<endl<<dashes<<endl;
+		    printUnfoundToFile(&unknownToPrint,fileError);
 
-	    fileError<<endl<<dashes<<endl<<"Wrong:"   <<endl<<dashes<<endl;
-	    printUnfoundToFile(&wrongToPrint,fileError);
-	}else{
-	    cerr << "Unable to print to file "<<filenameError<<endl;
+		    fileError<<endl<<dashes<<endl<<"Wrong:"   <<endl<<dashes<<endl;
+		    printUnfoundToFile(&wrongToPrint,fileError);
+		}else{
+		cerr << "Unable to print to file "<<filenameError<<endl;
+	    }
+	    fileError.close();
 	}
-	fileError.close();
+
+
     }
-
-
-
     //cleaning up
     deallocate();
     if(printError){
@@ -1049,7 +1391,7 @@ int main (int argc, char *argv[]) {
 
     if(ratioValuesFlag)
 	ratioValuesOS.close();
-
+    
     return 0;
 }
 

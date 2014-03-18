@@ -6,15 +6,15 @@ SIMPLEJSON= $(realpath ../SimpleJSON/)
 
 
 CXXFLAGS+= -O3 -Wall -I${BAMTOOLS}/include/ -I${LIBGAB} -I${LIBGAB}/gzstream/  -I${SIMPLEJSON}/src/
-LDLIBS+= ${BAMTOOLS}/lib/libbamtools.a ${LIBGAB}/utils.o -lm -lz
+LDLIBS+= ${BAMTOOLS}/lib/libbamtools.a ${LIBGAB}/utils.o ${LIBGAB}/gzstream/libgzstream.a  -lm -lz
 
 
-all:    assignRG
+all:    deML
 
 %.o: %.cpp
 	${CXX} -c ${CXXFLAGS} $^ 
 
-assignRG: assignRG.o PrefixTree.o RGAssign.o ${LIBGAB}/PutProgramInHeader.o ${SIMPLEJSON}/obj/JSON.o ${SIMPLEJSON}/obj/JSONValue.o
+deML: deML.o PrefixTree.o RGAssign.o ${LIBGAB}/PutProgramInHeader.o ${SIMPLEJSON}/obj/JSON.o ${SIMPLEJSON}/obj/JSONValue.o ${LIBGAB}/FastQObj.o  ${LIBGAB}/FastQParser.o 
 	${CXX} $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 
@@ -22,5 +22,5 @@ assignRG: assignRG.o PrefixTree.o RGAssign.o ${LIBGAB}/PutProgramInHeader.o ${SI
 
 
 clean:
-	rm -f assignRG *.o
+	rm -f deML *.o
 
