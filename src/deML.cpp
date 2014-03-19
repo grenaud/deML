@@ -721,7 +721,7 @@ void processFastq(string forwardfq,
 	}//end new rg
 	 
 
-	if(rgReturn.conflict  || rgReturn.wrong || rgReturn.unknown ){
+	if(rgReturn.conflict  || rgReturn.wrong || rgReturn.unknown ){ //if the reads fail to meet thresholds
 
 	    rg2FqWriters[predictedGroup]->pairr1f     << *(ffo) <<endl;
 	    rg2FqWriters[predictedGroup]->pairi1f     << *(i1fo)<<endl;

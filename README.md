@@ -47,8 +47,7 @@ running the program:
 
 To launch the program simply type:
 
-    src/assignRG
-
+    src/deML
 
 
 Test data:
@@ -56,11 +55,15 @@ Test data:
 
 For raw BAM files:
 
-    src/assignRG -i testData/index.txt -o testData/demultiplexed.bam testData/todemultiplex.bam
+    src/deML -i testData/index.txt -o testData/demultiplexed.bam testData/todemultiplex.bam
 
 For FASTQ files
 
+    src/deML -i testData/index.txt -f testData/todemultiplex.fq1.gz  -r testData/todemultiplex.fq2.gz -if1 testData/todemultiplex.i1.gz  -if2 testData/todemultiplex.i2.gz  -o testData/demultiplex
 
+
+-o testData/demultiplexed.bam testData/todemultiplex.bam
+ 
 Format for input
 ----------------------
 
