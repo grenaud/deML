@@ -1058,11 +1058,11 @@ int main (int argc, char *argv[]) {
     if(printError){
 	trieKnownString = new PrefixTree<string>();
 
-	if(!isFile( getCWD(argv[0])+"/../webForm/config.json" )){
-	    cerr<<"ERROR: file "<<(getCWD(argv[0])+"/../webForm/config.json")<<" was not found"<<endl;
+	if(!isFile( getCWD(argv[0])+"/../../webForm/config.json" )){
+	    cerr<<"ERROR: file "<<(getCWD(argv[0])+"/../../webForm/config.json")<<" was not found"<<endl;
 	    return 1;             
 	}
-	initializeKnownIndices(trieKnownString,getCWD(argv[0])+"/../webForm/config.json");
+	initializeKnownIndices(trieKnownString,getCWD(argv[0])+"/../../webForm/config.json");
 
 	// //debug
 	// vector<string> * temp3=new vector<string>();
@@ -1131,7 +1131,7 @@ int main (int argc, char *argv[]) {
     //  BEGIN : Processing index with numbers
     //
     if(!fileContainsSeq){
-	readIndexNumbers( getCWD(argv[0])+"/../webForm/config.json" );	
+	readIndexNumbers( getCWD(argv[0])+"/../../webForm/config.json" );	
 
 	firstLine=true;
 	vector<string> allLinesIndexFile = allTokens(indexStringFile,'\n');
