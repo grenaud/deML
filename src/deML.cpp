@@ -57,7 +57,7 @@ struct tallyForRG{
 
 static double rgScoreCutoff  = 80 ;             // two HQ bases can mismatch
 static double fracConflict   = 20 ;             // top shall be 100x more likely
-static double wrongness      = 30 ;             // flag wrong if the wrong pair is 1000x more likely
+static double wrongness      = 60 ;             // flag wrong if the wrong pair is a lot more likely
 static int    mismatchesTrie = 2;
 static int    maxErrorHits   = 20;
 PrefixTree<string> * trieKnownString;
@@ -189,8 +189,10 @@ void updateRecord( BamAlignment &al, const rgAssignment &rg )
         else
             al.RemoveTag("Z1") ;
 
-        if( (rg.topWrongToTopCorrect) <= 0) 
-            al.EditTag("Z2","i",(int)round(-10 * rg.topWrongToTopCorrect));
+
+
+        if( (rg.topWrongToTopCorrect) >= 0)  //if the log odds ratio is greater than 0, the ratio is greater than 1 and the mispairing scenario is more likely than the correct pairing one
+            al.EditTag("Z2","i",(int)round(10.0 * rg.topWrongToTopCorrect));
         else
             al.RemoveTag("Z2") ;
 
@@ -481,9 +483,9 @@ void printUnfoundToFile(vector< pair<string,int> > * unfound,ofstream & fileErro
 }
 
 void check_thresholds( rgAssignment &rg ) {
-    rg.unknown  = -10 * rg.logLikelihoodScore > rgScoreCutoff ;
-    rg.conflict = -10 * rg.logRatioTopToSecond < fracConflict && rg.logRatioTopToSecond < 0 ;
-    rg.wrong    = -10 * rg.topWrongToTopCorrect > wrongness ;
+    rg.unknown  =    (-10.0 * rg.logLikelihoodScore)   > rgScoreCutoff ;
+    rg.conflict =  (( -10.0 * rg.logRatioTopToSecond)  < fracConflict) && (rg.logRatioTopToSecond < 0.0) ;
+    rg.wrong    =  (   10.0 * rg.topWrongToTopCorrect) > wrongness ;
 }
 
 void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq)

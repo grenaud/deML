@@ -13,6 +13,7 @@
 #include <string>
 #include <map>
 #include <set>
+#include <float.h>
 
 #include "PrefixTree.h"
 

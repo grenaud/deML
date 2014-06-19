@@ -4,15 +4,17 @@
 // #define DEBUG
 // #define DEBUG2
 //#define DEBUG3
+// #define DEBUGMISPAIR
 
 PrefixTree<int> * indTrie1;
 PrefixTree<int> * indTrie2;
-indexData values;               // SRSLY?!
+indexData values;               
 
 ofstream * ratioValues;
 ofstream * rgqual;
 bool flag_ratioValues=false;
 bool flag_rgqual=false;
+bool warnedForDouble=false;
 
 
 // array containing the log10 of likelihoods corresponding to quality
@@ -240,141 +242,6 @@ indexData intern_readIndex(string filename){
 
     }  // ending while myFile.good() ){
 
-    // 	myFile.close();
-    // }else{ 
-    // 	cerr << "Unable to open file "<<filename<<endl;
-    // 	exit(1);
-    // }
-
-    // myFile.open(filename.c_str(), ios::in);
-    // if (myFile.is_open()){
-
-    // 	while ( getline (myFile,line)){
-    // 	    line+=' ';
-
-    // 	    if(isFirstLine){
-    // 		if(line[0] == '#'){
-    // 		    unsigned int i=0;
-    // 		    int numberOfFields=0;
-    // 		    bool inWS=true;
-    // 		    while(i<line.length()){			
-    // 			if( isspace(line[i])){			    
-    // 			    inWS=true;
-    // 			}else{
-    // 			    if(inWS){
-    // 				numberOfFields++;
-    // 			    }
-    // 			    inWS=false;			    
-    // 			}
-    // 			i++;
-    // 		    }
-		    
-    // 		    if(numberOfFields==2){ 
-    // 			toReturn.isDoubleIndex=false; 
-    // 		    }else{
-    // 			if(numberOfFields==3 || numberOfFields==5){
-    // 			    toReturn.isDoubleIndex=true; 
-    // 			}else{
-    // 			    cerr << "Must have 2, 3 or 5 fields"<<endl;
-    // 			    exit(1);
-    // 			}			
-    // 		    }
-
-    // 		}else{
-    // 		    cerr << "First line must begin with #"<<endl;
-    // 		    exit(1);
-    // 		}
-    // 		isFirstLine=false;
-    // 	    }else{
-    // 		int i=0;
-    // 		int fieldIndex=0;
-    // 		bool inWS=false;
-    // 		int lastOneNW=0;
-    // 		string foundName;
-    // 		while(i<int(line.length())){		
-		    
-    // 		    if( isspace(line[i]) && i==0){
-    // 			cerr<<line<<endl;
-    // 			cerr << "First character cannot be a space"<<endl;
-    // 			exit(1);
-    // 		    }			    
-    // 		    if( isspace(line[i]) ){			    
-    // 			if(!inWS){ //found a field
-
-    // 			    //first field, first index
-    // 			    if(fieldIndex==0){
-    // 				toReturn.indices1.push_back(toUpperCase(line.substr(lastOneNW,i-lastOneNW)));
-
-    // 				if(toReturn.mlindex1 < (i-lastOneNW)){
-    // 				    toReturn.mlindex1 =(i-lastOneNW);
-    // 				}
-
-    // 			    }else{
-    // 				//second field, either name of single ind or second index
-    // 				if(fieldIndex==1){
-    // 				    if(toReturn.isDoubleIndex){
-    // 					toReturn.indices2.push_back(toUpperCase(line.substr(lastOneNW,i-lastOneNW)));
-    // 					if(toReturn.mlindex2 < (i-lastOneNW)){
-    // 					    toReturn.mlindex2 =(i-lastOneNW);
-    // 					}
-    // 				    }else{
-    // 					foundName=line.substr(lastOneNW,i-lastOneNW);
-    // 					//duplicated names ?					
-    // 					if(toReturn.namesMap.find(  foundName  ) !=  toReturn.namesMap.end()){
-    // 					    cerr<<"Warning: The sequence name is duplicated "<<foundName<<endl;
-    // 					    //exit(1);
-    // 					}else{
-    // 					    toReturn.namesMap[ foundName ] = ""; 
-    // 					}
-
-    // 					toReturn.names.push_back( foundName );
-
-    // 				    }
-    //                             }else if(fieldIndex==2){
-    //                                 //sequence name when two indices
-    //                                 if(toReturn.isDoubleIndex){
-    //                                     //duplicated names
-    //                                     foundName=line.substr(lastOneNW,i-lastOneNW);
-					
-    //                                     if(toReturn.namesMap.find(  foundName  ) !=  toReturn.namesMap.end()){
-    //                                         cerr<<"Warning: The sequence name is duplicated "<<foundName<<endl;
-    //                                         //exit(1);
-    //                                     }else{
-    //                                         toReturn.namesMap[ foundName ] = ""; 
-    //                                     }
-
-    //                                     toReturn.names.push_back( foundName );
-    //                                 }else{
-    //                                     //it's a comment for single index
-    //                                     toReturn.namesMap[ foundName ] +=  line.substr(lastOneNW,i-lastOneNW);
-    //                                     // cerr<<"Single index file cannot have 3 fields"<<endl;
-    //                                     // exit(1);
-    //                                 }
-    //                             }else{
-    //                                 //it's a comment again
-    //                                 toReturn.namesMap[ foundName ] +=  line.substr(lastOneNW,i-lastOneNW);
-    // 				}
-
-    // 			    }
-    // 			    fieldIndex++;
-    // 			}
-    // 			inWS=true;		    
-			
-    // 		    }else{
-    // 			if(inWS)
-    // 			    lastOneNW=i;
-    // 			inWS=false;			    
-    // 		    }
-    // 		    i++;		
-    // 		} //ending while(i<line.length()){		
-    // 	    }  // ending else firstline
-
-    // 	}  // ending while myFile.good() ){
-    // 	myFile.close();
-    // }else{ 
-    // 	cerr << "Unable to open file "<<filename<<endl;
-    // 	exit(1);
-    // }
 
 
 
@@ -451,7 +318,7 @@ map<string,string>  readIndexFile(string filename,int mismatchesTrie,bool _shift
 
 	if(toPrint.length() > 0){
 	    if(values.names[i] != toPrint)
-		cerr<<values.indices1[i]<<" from #"<<values.names[i]<<"# causes a conflict with #"<<toPrint<<"#"<<endl;
+		cerr<<values.indices1[i]<<" from "<<values.names[i]<<" causes a conflict with "<<toPrint<<""<<endl;
 	}
     }
 
@@ -606,26 +473,34 @@ rgAssignment assignReadGroup(string &index1,
 	quals1.push_back(     max(tempIntTopush ,2)  )   ; //since qual scores less than 2 do not make sense
     }
 
-    if(!index2.empty()){
-	indTrie2->searchMismatch(  index2.c_str(),&matchesind2,mismatchesTrie);
 
-	if(shiftByOne){       
-	    indTrie2->searchMismatch( ("N"+index2.substr(0, index2.size() -1)     ).c_str(),&matchesind2,mismatchesTrie);
-	    indTrie2->searchMismatch(     (index2.substr(1, index2.size() -1)+"N" ).c_str(),&matchesind2,mismatchesTrie);
-	}
+    if(!index2.empty()){
+	if(!values.isDoubleIndex){
+	    if(!warnedForDouble){
+		cerr<<"WARNING : THIS RUN IS DOUBLE INDEXED YET YOUR INDEX IS SINGLE INDEXED"<<endl;
+		warnedForDouble=true;
+	    }
+	}else{
+	    indTrie2->searchMismatch(  index2.c_str(),&matchesind2,mismatchesTrie);
+
+	    if(shiftByOne){       
+		indTrie2->searchMismatch( ("N"+index2.substr(0, index2.size() -1)     ).c_str(),&matchesind2,mismatchesTrie);
+		indTrie2->searchMismatch(     (index2.substr(1, index2.size() -1)+"N" ).c_str(),&matchesind2,mismatchesTrie);
+	    }
 	
-	for(unsigned int i=0;i<index2q.length();i++){
-	    char tempCtocov   = char(index2q[i]);
-	    int tempIntTopush =(int(tempCtocov)-qualOffset);
-	    quals2.push_back( max( tempIntTopush ,2)  )   ;	//since qual scores less than 2 do not make sense
+	    for(unsigned int i=0;i<index2q.length();i++){
+		char tempCtocov   = char(index2q[i]);
+		int tempIntTopush =(int(tempCtocov)-qualOffset);
+		quals2.push_back( max( tempIntTopush ,2)  )   ;	//since qual scores less than 2 do not make sense
+	    }
 	}
     }
 
 
     set<int> foundIndices; //set of indices found
 
-    double like1;
-    double like2;
+    double like1=0.0;
+    double like2=0.0;
 
     vector< pair<int,double>  > sortedLikelihoodAll; //likelihood for both indices
     vector< pair<int,double>  > sortedLikelihood1;   //likelihood for index 1
@@ -655,7 +530,7 @@ rgAssignment assignReadGroup(string &index1,
 
 	sortedLikelihood1.push_back(     make_pair (*sit,like1) );
 
-	if(!index2.empty()){
+	if(!index2.empty()  && 	values.isDoubleIndex ){
 
 	    like2  =  computeLike(index2,values.indices2[ *sit ],&quals2);
 
@@ -703,7 +578,7 @@ rgAssignment assignReadGroup(string &index1,
     	cerr<< values.names[ sortedLikelihoodAll[j].first ]<<"\t"<< sortedLikelihoodAll[j].second<<"\t"<<pow(10.0,sortedLikelihoodAll[j].second)<<endl;
     }
     cerr<<endl;
-    exit(1);
+    //exit(1);
 #endif
 
     // DETECT WRONGS
@@ -718,20 +593,59 @@ rgAssignment assignReadGroup(string &index1,
 
     if( (sortedLikelihood1.size()>1) && 
 	(sortedLikelihood2.size()>1)   ){
-        if(sortedLikelihood1[0].first != sortedLikelihood2[0].first) {
-            // mismatch, we found the wrong pair
-            toReturn.topWrongToTopCorrect = sortedLikelihoodAll[0].second
-                                          - sortedLikelihood1[0].second
-                                          - sortedLikelihood2[0].second ;
-        }else {
+        if(sortedLikelihood1[0].first != sortedLikelihood2[0].first) { // mismatch, we found the wrong pair
+           
+	    //find likelihood of p5 (in sortedLikelihood2)  for p7 top hit (sortedLikelihood1[0].first)
+	    int  indexP5LikeForP7Top=-1;
+	    for(unsigned int j=0;j<sortedLikelihood2.size();j++){
+		if(sortedLikelihood2[j].first == sortedLikelihood1[0].first){
+		    indexP5LikeForP7Top = int(j);
+		    break;
+		}
+	    }
+
+	    //find likelihood of p7 (in sortedLikelihood1)  for p5 top hit (sortedLikelihood2[0].first)
+	    int  indexP7LikeForP5Top=-1;
+	    for(unsigned int j=0;j<sortedLikelihood1.size();j++){
+		if(sortedLikelihood1[j].first == sortedLikelihood2[0].first){
+		    indexP7LikeForP5Top = int(j);
+		    break;
+		}
+	    }
+
+	    if(indexP7LikeForP5Top == -1 ||
+	       indexP5LikeForP7Top == -1 ){
+		cerr<<"Internal error, unable to trace back the likelihood for one of the index pairs"<<endl;
+		exit(1);
+	    }
+	       
+	  
+	    
+            toReturn.topWrongToTopCorrect =    1.0*(  sortedLikelihood1[                  0].second + sortedLikelihood2[                   0 ].second )
+		                             + 0.3 
+		                             - oplus( sortedLikelihood1[                  0].second + sortedLikelihood2[ indexP5LikeForP7Top ].second 
+						      , 
+						      sortedLikelihood1[indexP7LikeForP5Top].second + sortedLikelihood2[                   0 ].second ) ;
+	    
+
+#ifdef DEBUGMISPAIR
+	    cout<<"conf\t"<<toReturn.topWrongToTopCorrect<<"\t"<<-10*toReturn.topWrongToTopCorrect<<endl;
+#endif
+        }else { //stem from the same sample
             // we compare one correct pair to two potentially wrong
             // ones; add 0.3 to make it fair
-            toReturn.topWrongToTopCorrect = sortedLikelihoodAll[0].second + 0.3 -
-                oplus( sortedLikelihood1[0].second + sortedLikelihood2[1].second 
-                     , sortedLikelihood1[1].second + sortedLikelihood2[0].second ) ;
+            toReturn.topWrongToTopCorrect = - 1.0* sortedLikelihoodAll[0].second 
+                                 	    - 0.3 
+		                            + oplus( sortedLikelihood1[0].second + sortedLikelihood2[1].second 
+						     , 
+						     sortedLikelihood1[1].second + sortedLikelihood2[0].second ) ;
+
+#ifdef DEBUGMISPAIR
+	    cout<<"same\t"<<toReturn.topWrongToTopCorrect<<"\t"<<-10*toReturn.topWrongToTopCorrect<<endl;
+#endif
         }
     }else{
-	toReturn.topWrongToTopCorrect = 0x7fffffff ; // +infinity for practical purposes
+	toReturn.topWrongToTopCorrect = -1.0*1000000  ; // +infinity for practical purposes
     }
 
     // DETECT CONFLICTS

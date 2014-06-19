@@ -8,6 +8,7 @@ SIMPLEJSON= $(realpath ../SimpleJSON/)
 CXXFLAGS+= -O3 -Wall -I${BAMTOOLS}/include/ -I${LIBGAB} -I${LIBGAB}/gzstream/  -I${SIMPLEJSON}/src/
 LDLIBS+= ${BAMTOOLS}/lib/libbamtools.a ${LIBGAB}/utils.o ${LIBGAB}/gzstream/libgzstream.a  -lm -lz
 
+CXX=g++ #-g -pg
 
 all:    deML
 
