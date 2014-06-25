@@ -28,17 +28,9 @@ or
 Installation:
 ----------------------
 
-1) Build Bamtools first:
-
-    cd bamtools/   
-    mkdir build/   
-    cd build/
-    cmake ..
-    make 
-    cd ../..
+1) make sure you have "cmake" and "git" installed, check for it by typing " git --version" and "cmake --version"
 
 2) Build the submodules and main code by typing :
-
     make
 
 
