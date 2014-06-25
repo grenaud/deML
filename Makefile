@@ -4,19 +4,19 @@ SHELL := /bin/bash
 
 all: 	src/deML
 
-src/deML: SimpleJSON libgab bamtools
+src/deML: SimpleJSON/obj/JSONValue.o libgab/utils.o bamtools/lib/libbamtools.so
 	make -C src
 
-SimpleJSON:
-	if [ ! -d SimpleJSON ]; then git clone --recursive https://github.com/MJPA/SimpleJSON.git; fi	
+SimpleJSON/obj/JSONValue.o:
+	git clone --recursive https://github.com/MJPA/SimpleJSON.git
 	make -C SimpleJSON
 
-libgab: bamtools
-	if [ ! -d libgab ]; then git clone --recursive https://github.com/grenaud/libgab.git; fi
+libgab/utils.o: bamtools/lib/libbamtools.so
+	git clone --recursive https://github.com/grenaud/libgab.git
 	make -C libgab
 
-bamtools:
-	if [ ! -d bamtools ]; then git clone --recursive https://github.com/pezmaster31/bamtools.git; fi
+bamtools/lib/libbamtools.so:
+	git clone --recursive https://github.com/pezmaster31/bamtools.git
 	cd bamtools/ && mkdir build/  && cd build/ && cmake .. && make && cd ../..
 
 clean:
