@@ -1060,12 +1060,16 @@ int main (int argc, char *argv[]) {
     if(printError){
 	trieKnownString = new PrefixTree<string>();
 
-	if(!isFile( getCWD(argv[0])+"/../../webForm/config.json" )){
-	    cerr<<"ERROR: file "<<(getCWD(argv[0])+"/../../webForm/config.json")<<" was not found"<<endl;
-	    return 1;             
-	}
-	initializeKnownIndices(trieKnownString,getCWD(argv[0])+"/../../webForm/config.json");
+	string configFile = "/../../webForm/config.json";
 
+	if(!isFile( getCWD(argv[0])+configFile )){
+	    configFile = "/../webForm/config.json";
+	    if(!isFile( getCWD(argv[0])+configFile )){
+		cerr<<"ERROR: file "<<(getCWD(argv[0])+"/../../webForm/config.json")<<" or "<<(getCWD(argv[0])+"/../webForm/config.json")<<" were not found, this file is required with the -e or --error option"<<endl;
+		return 1;             
+	    }
+	}
+	initializeKnownIndices(trieKnownString,getCWD(argv[0])+configFile);
 	// //debug
 	// vector<string> * temp3=new vector<string>();
 	// vector<string> * temp4=new vector<string>();
@@ -1133,7 +1137,20 @@ int main (int argc, char *argv[]) {
     //  BEGIN : Processing index with numbers
     //
     if(!fileContainsSeq){
-	readIndexNumbers( getCWD(argv[0])+"/../../webForm/config.json" );	
+
+
+	string configFile = "/../../webForm/config.json";
+
+	if(!isFile( getCWD(argv[0])+configFile )){
+	    configFile = "/../webForm/config.json";
+	    if(!isFile( getCWD(argv[0])+configFile )){
+		cerr<<"ERROR: file "<<(getCWD(argv[0])+"/../../webForm/config.json")<<" or "<<(getCWD(argv[0])+"/../webForm/config.json")<<" were not found, this file is required with the -e or --error option"<<endl;
+		return 1;             
+	    }
+	}
+	//initializeKnownIndices(trieKnownString,getCWD(argv[0])+configFile);
+	
+	readIndexNumbers( getCWD(argv[0])+configFile);	
 
 	firstLine=true;
 	vector<string> allLinesIndexFile = allTokens(indexStringFile,'\n');
@@ -1220,8 +1237,8 @@ int main (int argc, char *argv[]) {
 	SamHeader  myHeader=reader.GetHeader();
 	SamProgram sp;
    
-	string pID          = "assignRG";   
-	string pName        = "assignRG";   
+	string pID          = "deML";   
+	string pName        = "deML";   
 	string pCommandLine = "";
 	for(int i=0;i<(argc);i++){
 	    pCommandLine += (string(argv[i])+" ");

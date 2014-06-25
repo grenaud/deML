@@ -1,0 +1,1994 @@
+{
+    "alibdir": "/mnt/solexa/bin/aLib/",
+    "fastqcdir": "/mnt/solexa/bin/FastQC/",
+    "illuminareaddir": "/mnt/solexa/",
+    "illuminawritedir": "/mnt/ngs_data/",
+    "sequencers": {
+      "sequencer": [
+        {
+          "id": "M00518",
+          "type": "miseq"
+        },
+        {
+          "id": "SN7001204",
+          "type": "hiseq"
+        },
+        {
+          "id": "SN7001204",
+          "type": "hiseq"
+        }
+      ]
+    },
+    "runstodisplay": "30",
+    "emailAddrToSend": "gabriel_renaud@eva.mpg.de",
+    "genomedirectory": "/mnt/solexa/Genomes/",
+    "tempdirectory": "/mnt/solexa/tmp/",
+    "freeibispath": "/mnt/solexa/bin/freeIbis/",
+    "controlindex": "CGATTCG",
+    "controlindex2": "CGATTCG",
+    "phixref": "/mnt/solexa/Genomes/phiX/control/whole_genome.fa",
+    "chimeras": {
+      "chimera": [
+        {
+          "protocol": "IllMultiplex",
+          "name": "Illumina Multiplex library",
+          "adapter1": "'AGATCGGAAGAGCACACGTCTGAACTCCAGTCACIIIIIIIATCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT'",
+          "chimera": "'ACACTCTTTCCCTACACGTCTGAACTCCAG,ACACTCTTTCCCACACGTCTGAACTCCAGT,ACACTCTTTCCCTACACACGTCTGAACTCC,CTCTTTCCCTACACGTCTGAACTCCAGTCA,GAAGAGCACACGTCTGAACTCCAGTCACII,GAGCACACGTCTGAACTCCAGTCACIIIII,GATCGGAAGAGCACACGTCTGAACTCCAGT,AGATCGGAAGAGCACACGTCTGAACTCCAG,AGAGCACACGTCTGAACTCCAGTCACIIII,ACACGTCTGAACTCCAGTCACIIIIIIIAT,GTGCACACGTCTGAACTCCAGTCACIIIII,AGCACACGTCTGAACTCCAGTCACIIIIII,CGTATGCCGTCTTCTGCTTGAAAAAAAAAA'"
+        },
+        {
+          "protocol": "IllTruSeq",
+          "name": "Illumina TruSeq RNA/DNA library",
+          "adapter1": "'AGATCGGAAGAGCACACGTCTGAACTCCAGTCACIIIIIIIATCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT'",
+          "chimera": "'ACACTCTTTCCCTACACGTCTGAACTCCAG,ACACTCTTTCCCACACGTCTGAACTCCAGT,ACACTCTTTCCCTACACACGTCTGAACTCC,CTCTTTCCCTACACGTCTGAACTCCAGTCA,GAAGAGCACACGTCTGAACTCCAGTCACII,GAGCACACGTCTGAACTCCAGTCACIIIII,GATCGGAAGAGCACACGTCTGAACTCCAGT,AGATCGGAAGAGCACACGTCTGAACTCCAG,AGAGCACACGTCTGAACTCCAGTCACIIII,ACACGTCTGAACTCCAGTCACIIIIIIIAT,GTGCACACGTCTGAACTCCAGTCACIIIII,AGCACACGTCTGAACTCCAGTCACIIIIII,CGTATGCCGTCTTCTGCTTGAAAAAAAAAA'"
+        },
+        {
+          "protocol": "IllPE",
+          "name": "Illumina Paired End library",
+          "adapter1": "'AGATCGGAAGAGCGGTTCAGCAGGAATGCCGAGACCGATCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT'",
+          "chimera": "'AGATCTAGATCGGAAGAGCGGTTCAGCAGGAATGCCGAGACCGATCTCGT,GAAGAGCGGTTCAGCAGGAATGCCGAGACCGATCTCGTATGCCG,AAGAGCGGTTCAGCAGGAATGCCGAGACCGATCTCGTATGCCGTCTTCTG'"
+        },
+        {
+          "protocol": "IllSR",
+          "name": "Illumina Single Read library",
+          "adapter1": "'AGATCGGAAGAGCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "''",
+          "chimera": "''"
+        },
+        {
+          "protocol": "IllsRNA",
+          "name": "Illumina smallRNA/DpnI library",
+          "adapter1": "'TCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "''",
+          "chimera": "''"
+        },
+        {
+          "protocol": "IllsRNA2",
+          "name": "Illumina smallRNA II",
+          "adapter1": "'ATCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "''",
+          "chimera": "'TCTCGTATGCCGTCTTCTGCTTG,TCGTATGCCGTCTTCTGCTTG,GTATGCCGTCTTCTGCTTG'"
+        },
+        {
+          "protocol": "IllsRNA2Index",
+          "name": "Illumina smallRNA II (5p Index)",
+          "adapter1": "'ATCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "''",
+          "chimera": "'TCTCGTATGCCGTCTTCTGCTTG,TCGTATGCCGTCTTCTGCTTG,GTATGCCGTCTTCTGCTTG'"
+        },
+        {
+          "protocol": "IllSAGE",
+          "name": "Illumina SAGE (NlaIII) library",
+          "adapter1": "'TCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "''",
+          "chimera": "'GTATGCCGTCTTCTGCTTG,CCGTCTTCTGCTTGTCGTATGCCGTCTTCTGCTTG,CGTATGCCGTCTTCTGCTTG,CCGTCTTCTGCTTGAAAAAAAAA,TCGGACTGTAGAACTCT'"
+        },
+        {
+          "protocol": "IllMultiplexCR1",
+          "name": "Illumina CR1 Multiplex (Neandertal group)",
+          "adapter1": "'GAGTAGATCGGAAGAGCACACGTCTGAACTCCAGTCACIIIIIIIATCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "'GAGTAGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT'",
+          "chimera": "''"
+        },
+        {
+          "protocol": "IllMultiplexCR2",
+          "name": "Illumina CR2 Multiplex (Neandertal group)",
+          "adapter1": "'AGACAGATCGGAAGAGCACACGTCTGAACTCCAGTCACIIIIIIIATCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "'AGACAGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT'",
+          "chimera": "''"
+        },
+        {
+          "protocol": "IllMultiplex_ssDNA",
+          "name": "Illumina ssDNA Multiplex (ssDNA ligation protocol with 5nt deletion)",
+          "adapter1": "'AGATCGGAAGAGCACACGTCTGAACTCCAGTCACIIIIIIIATCTCGTATGCCGTCTTCTGCTTG'",
+          "adapter2": "'GGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT'",
+          "chimera": "''"
+        }
+      ]
+    },
+    "indices": {
+      "p7indices": {
+        "p7index": [
+          {
+            "id": "397",
+            "seq": "GAGAGGC"
+          },
+          {
+            "id": "398",
+            "seq": "GCTTCAG"
+          },
+          {
+            "id": "399",
+            "seq": "ATATCCA"
+          },
+          {
+            "id": "400",
+            "seq": "GTTATAC"
+          },
+          {
+            "id": "401",
+            "seq": "CCTTAAT"
+          },
+          {
+            "id": "402",
+            "seq": "CGCCAAC"
+          },
+          {
+            "id": "403",
+            "seq": "TACTCGC"
+          },
+          {
+            "id": "404",
+            "seq": "AGCGCCA"
+          },
+          {
+            "id": "405",
+            "seq": "TAAGTAA"
+          },
+          {
+            "id": "406",
+            "seq": "TTGGTCA"
+          },
+          {
+            "id": "407",
+            "seq": "GTTGCAT"
+          },
+          {
+            "id": "408",
+            "seq": "ATCCTCT"
+          },
+          {
+            "id": "409",
+            "seq": "GGCGGTC"
+          },
+          {
+            "id": "410",
+            "seq": "ATATGAT"
+          },
+          {
+            "id": "411",
+            "seq": "GGTACGC"
+          },
+          {
+            "id": "412",
+            "seq": "AAGAACG"
+          },
+          {
+            "id": "413",
+            "seq": "CCGTTGA"
+          },
+          {
+            "id": "414",
+            "seq": "AGCAATC"
+          },
+          {
+            "id": "415",
+            "seq": "GCTCCGT"
+          },
+          {
+            "id": "416",
+            "seq": "CAACTCT"
+          },
+          {
+            "id": "417",
+            "seq": "AGACTCC"
+          },
+          {
+            "id": "418",
+            "seq": "CTATCTT"
+          },
+          {
+            "id": "419",
+            "seq": "AAGCAGT"
+          },
+          {
+            "id": "420",
+            "seq": "GTTACCG"
+          },
+          {
+            "id": "421",
+            "seq": "CCTAACG"
+          },
+          {
+            "id": "422",
+            "seq": "ATCATAA"
+          },
+          {
+            "id": "423",
+            "seq": "TGATAAC"
+          },
+          {
+            "id": "424",
+            "seq": "TCTCCTA"
+          },
+          {
+            "id": "425",
+            "seq": "CAGAGCA"
+          },
+          {
+            "id": "426",
+            "seq": "CGGCTGG"
+          },
+          {
+            "id": "427",
+            "seq": "CGCTATT"
+          },
+          {
+            "id": "428",
+            "seq": "GATCGTC"
+          },
+          {
+            "id": "429",
+            "seq": "ACGGCAG"
+          },
+          {
+            "id": "430",
+            "seq": "GACCGAT"
+          },
+          {
+            "id": "431",
+            "seq": "ACTTGCG"
+          },
+          {
+            "id": "432",
+            "seq": "GTAAGCC"
+          },
+          {
+            "id": "433",
+            "seq": "GCCATGC"
+          },
+          {
+            "id": "434",
+            "seq": "ATAACGT"
+          },
+          {
+            "id": "435",
+            "seq": "CGGACGT"
+          },
+          {
+            "id": "436",
+            "seq": "GCGAGTA"
+          },
+          {
+            "id": "437",
+            "seq": "ACGCGGA"
+          },
+          {
+            "id": "438",
+            "seq": "GTCTAAT"
+          },
+          {
+            "id": "439",
+            "seq": "GAAGCGT"
+          },
+          {
+            "id": "440",
+            "seq": "CGGTAAG"
+          },
+          {
+            "id": "441",
+            "seq": "GGTAACT"
+          },
+          {
+            "id": "442",
+            "seq": "AATATAG"
+          },
+          {
+            "id": "443",
+            "seq": "CCTCGCC"
+          },
+          {
+            "id": "444",
+            "seq": "TTAATAG"
+          },
+          {
+            "id": "445",
+            "seq": "CCGAAGC"
+          },
+          {
+            "id": "446",
+            "seq": "TCGTTAT"
+          },
+          {
+            "id": "447",
+            "seq": "GGCTCTG"
+          },
+          {
+            "id": "448",
+            "seq": "CCAAGTC"
+          },
+          {
+            "id": "449",
+            "seq": "CTTGGAA"
+          },
+          {
+            "id": "450",
+            "seq": "TGAAGCT"
+          },
+          {
+            "id": "451",
+            "seq": "GGTTGAC"
+          },
+          {
+            "id": "452",
+            "seq": "CCGCCAT"
+          },
+          {
+            "id": "453",
+            "seq": "ACCAGAG"
+          },
+          {
+            "id": "454",
+            "seq": "GCTGAGA"
+          },
+          {
+            "id": "455",
+            "seq": "CCTTCGC"
+          },
+          {
+            "id": "456",
+            "seq": "CTGGCCT"
+          },
+          {
+            "id": "457",
+            "seq": "CGCAAGG"
+          },
+          {
+            "id": "458",
+            "seq": "TGAGAGA"
+          },
+          {
+            "id": "459",
+            "seq": "AAGATTC"
+          },
+          {
+            "id": "460",
+            "seq": "ATCGGTT"
+          },
+          {
+            "id": "461",
+            "seq": "ACGAGCC"
+          },
+          {
+            "id": "462",
+            "seq": "TGGATAC"
+          },
+          {
+            "id": "463",
+            "seq": "ATTCCAG"
+          },
+          {
+            "id": "464",
+            "seq": "ACTCATT"
+          },
+          {
+            "id": "465",
+            "seq": "ACCTCGT"
+          },
+          {
+            "id": "466",
+            "seq": "AGCTTAT"
+          },
+          {
+            "id": "467",
+            "seq": "GCGATCT"
+          },
+          {
+            "id": "468",
+            "seq": "CTCCAGT"
+          },
+          {
+            "id": "469",
+            "seq": "GAACTTA"
+          },
+          {
+            "id": "470",
+            "seq": "CCAATAA"
+          },
+          {
+            "id": "471",
+            "seq": "AGGCGAG"
+          },
+          {
+            "id": "472",
+            "seq": "CTCAGAT"
+          },
+          {
+            "id": "473",
+            "seq": "AAGACGA"
+          },
+          {
+            "id": "474",
+            "seq": "ACCGCTC"
+          },
+          {
+            "id": "475",
+            "seq": "AACTGAC"
+          },
+          {
+            "id": "476",
+            "seq": "GCAACTG"
+          },
+          {
+            "id": "477",
+            "seq": "GAGTAAC"
+          },
+          {
+            "id": "478",
+            "seq": "GATTAGG"
+          },
+          {
+            "id": "479",
+            "seq": "AGTCGCT"
+          },
+          {
+            "id": "480",
+            "seq": "CATAGAC"
+          },
+          {
+            "id": "481",
+            "seq": "ACTACGG"
+          },
+          {
+            "id": "482",
+            "seq": "GGCTAGC"
+          },
+          {
+            "id": "483",
+            "seq": "CCATGAG"
+          },
+          {
+            "id": "484",
+            "seq": "GCTGGTT"
+          },
+          {
+            "id": "485",
+            "seq": "AGAGTAG"
+          },
+          {
+            "id": "486",
+            "seq": "TATCAAC"
+          },
+          {
+            "id": "487",
+            "seq": "ATACGCG"
+          },
+          {
+            "id": "488",
+            "seq": "GACGTAC"
+          },
+          {
+            "id": "489",
+            "seq": "CTACTTC"
+          },
+          {
+            "id": "490",
+            "seq": "TGGTCGG"
+          },
+          {
+            "id": "491",
+            "seq": "AGACCAT"
+          },
+          {
+            "id": "492",
+            "seq": "TCCGAAC"
+          },
+          {
+            "id": "301",
+            "seq": "TCGCAGG"
+          },
+          {
+            "id": "302",
+            "seq": "CTCTGCA"
+          },
+          {
+            "id": "303",
+            "seq": "CCTAGGT"
+          },
+          {
+            "id": "304",
+            "seq": "GGATCAA"
+          },
+          {
+            "id": "305",
+            "seq": "GCAAGAT"
+          },
+          {
+            "id": "306",
+            "seq": "ATGGAGA"
+          },
+          {
+            "id": "307",
+            "seq": "CTCGATG"
+          },
+          {
+            "id": "308",
+            "seq": "GCTCGAA"
+          },
+          {
+            "id": "309",
+            "seq": "ACCAACT"
+          },
+          {
+            "id": "310",
+            "seq": "CCGGTAC"
+          },
+          {
+            "id": "311",
+            "seq": "AACTCCG"
+          },
+          {
+            "id": "312",
+            "seq": "TTGAAGT"
+          },
+          {
+            "id": "313",
+            "seq": "ACTATCA"
+          },
+          {
+            "id": "314",
+            "seq": "TTGGATC"
+          },
+          {
+            "id": "315",
+            "seq": "CGACCTG"
+          },
+          {
+            "id": "316",
+            "seq": "TAATGCG"
+          },
+          {
+            "id": "317",
+            "seq": "AGGTACC"
+          },
+          {
+            "id": "318",
+            "seq": "TGCGTCC"
+          },
+          {
+            "id": "319",
+            "seq": "GAATCTC"
+          },
+          {
+            "id": "320",
+            "seq": "CATGCTC"
+          },
+          {
+            "id": "321",
+            "seq": "ACGCAAC"
+          },
+          {
+            "id": "322",
+            "seq": "GCATTGG"
+          },
+          {
+            "id": "323",
+            "seq": "GATCTCG"
+          },
+          {
+            "id": "324",
+            "seq": "CAATATG"
+          },
+          {
+            "id": "325",
+            "seq": "TGACGTC"
+          },
+          {
+            "id": "326",
+            "seq": "GATGCCA"
+          },
+          {
+            "id": "327",
+            "seq": "CAATTAC"
+          },
+          {
+            "id": "328",
+            "seq": "AGATAGG"
+          },
+          {
+            "id": "329",
+            "seq": "CCGATTG"
+          },
+          {
+            "id": "330",
+            "seq": "ATGCCGC"
+          },
+          {
+            "id": "331",
+            "seq": "CAGTACT"
+          },
+          {
+            "id": "332",
+            "seq": "AATAGTA"
+          },
+          {
+            "id": "333",
+            "seq": "CATCCGG"
+          },
+          {
+            "id": "334",
+            "seq": "TCATGGT"
+          },
+          {
+            "id": "335",
+            "seq": "AGAACCG"
+          },
+          {
+            "id": "336",
+            "seq": "TGGAATA"
+          },
+          {
+            "id": "337",
+            "seq": "CAGGAGG"
+          },
+          {
+            "id": "338",
+            "seq": "AATACCT"
+          },
+          {
+            "id": "339",
+            "seq": "CGAATGC"
+          },
+          {
+            "id": "340",
+            "seq": "TTCGCAA"
+          },
+          {
+            "id": "341",
+            "seq": "AATTCAA"
+          },
+          {
+            "id": "342",
+            "seq": "CGCGCAG"
+          },
+          {
+            "id": "343",
+            "seq": "AAGGTCT"
+          },
+          {
+            "id": "344",
+            "seq": "ACTGGAC"
+          },
+          {
+            "id": "345",
+            "seq": "AGCAGGT"
+          },
+          {
+            "id": "346",
+            "seq": "GTACCGG"
+          },
+          {
+            "id": "347",
+            "seq": "GGTCAAG"
+          },
+          {
+            "id": "348",
+            "seq": "AATGATG"
+          },
+          {
+            "id": "349",
+            "seq": "AGTCAGA"
+          },
+          {
+            "id": "350",
+            "seq": "AACTAGA"
+          },
+          {
+            "id": "351",
+            "seq": "CTATGGC"
+          },
+          {
+            "id": "352",
+            "seq": "CGACGGT"
+          },
+          {
+            "id": "353",
+            "seq": "AACCAAG"
+          },
+          {
+            "id": "354",
+            "seq": "CGGCGTA"
+          },
+          {
+            "id": "355",
+            "seq": "GCAGTCC"
+          },
+          {
+            "id": "356",
+            "seq": "CTCGCGC"
+          },
+          {
+            "id": "357",
+            "seq": "CTGCGAC"
+          },
+          {
+            "id": "358",
+            "seq": "ACGTATG"
+          },
+          {
+            "id": "359",
+            "seq": "ATACTGA"
+          },
+          {
+            "id": "360",
+            "seq": "TACTTAG"
+          },
+          {
+            "id": "361",
+            "seq": "AAGCTAA"
+          },
+          {
+            "id": "362",
+            "seq": "GACGGCG"
+          },
+          {
+            "id": "363",
+            "seq": "AGAAGAC"
+          },
+          {
+            "id": "364",
+            "seq": "GTCCGGC"
+          },
+          {
+            "id": "365",
+            "seq": "TCAGCTT"
+          },
+          {
+            "id": "366",
+            "seq": "AGAGCGC"
+          },
+          {
+            "id": "367",
+            "seq": "GCCTACG"
+          },
+          {
+            "id": "368",
+            "seq": "TAATCAT"
+          },
+          {
+            "id": "369",
+            "seq": "AACCTGC"
+          },
+          {
+            "id": "370",
+            "seq": "GACGATT"
+          },
+          {
+            "id": "371",
+            "seq": "TAGGCCG"
+          },
+          {
+            "id": "372",
+            "seq": "GGCATAG"
+          },
+          {
+            "id": "373",
+            "seq": "TTCAACC"
+          },
+          {
+            "id": "374",
+            "seq": "TTAACTC"
+          },
+          {
+            "id": "375",
+            "seq": "TAGTCTA"
+          },
+          {
+            "id": "376",
+            "seq": "TGCATGA"
+          },
+          {
+            "id": "377",
+            "seq": "AATAAGC"
+          },
+          {
+            "id": "378",
+            "seq": "AGCCTTG"
+          },
+          {
+            "id": "379",
+            "seq": "CCAACCT"
+          },
+          {
+            "id": "380",
+            "seq": "GCAGAAG"
+          },
+          {
+            "id": "381",
+            "seq": "AGAATTA"
+          },
+          {
+            "id": "382",
+            "seq": "CAGCATC"
+          },
+          {
+            "id": "383",
+            "seq": "TTCTAGG"
+          },
+          {
+            "id": "384",
+            "seq": "CCTCTAG"
+          },
+          {
+            "id": "385",
+            "seq": "CCGGATA"
+          },
+          {
+            "id": "386",
+            "seq": "GCCGCCT"
+          },
+          {
+            "id": "387",
+            "seq": "AACGACC"
+          },
+          {
+            "id": "388",
+            "seq": "CCAGCGG"
+          },
+          {
+            "id": "389",
+            "seq": "TAGTTCC"
+          },
+          {
+            "id": "390",
+            "seq": "TGGCAAT"
+          },
+          {
+            "id": "391",
+            "seq": "CGTATAT"
+          },
+          {
+            "id": "392",
+            "seq": "GCTAATC"
+          },
+          {
+            "id": "393",
+            "seq": "GACTTCT"
+          },
+          {
+            "id": "394",
+            "seq": "GTACTAT"
+          },
+          {
+            "id": "395",
+            "seq": "CGAGATC"
+          },
+          {
+            "id": "396",
+            "seq": "CGCAGCC"
+          },
+          {
+            "id": "1",
+            "seq": "ACAGTG"
+          },
+          {
+            "id": "2",
+            "seq": "GATCAG"
+          },
+          {
+            "id": "3",
+            "seq": "ATCACG"
+          },
+          {
+            "id": "4",
+            "seq": "CGATGT"
+          },
+          {
+            "id": "5",
+            "seq": "CTTGTA"
+          },
+          {
+            "id": "6",
+            "seq": "GGCTAC"
+          },
+          {
+            "id": "7",
+            "seq": "TGACCA"
+          },
+          {
+            "id": "8",
+            "seq": "AAAGCA"
+          },
+          {
+            "id": "9",
+            "seq": "AAATGC"
+          },
+          {
+            "id": "10",
+            "seq": "AAGCGA"
+          },
+          {
+            "id": "11",
+            "seq": "AAGGAC"
+          },
+          {
+            "id": "12",
+            "seq": "AATAGG"
+          },
+          {
+            "id": "13",
+            "seq": "ACCCAG"
+          },
+          {
+            "id": "14",
+            "seq": "ACTCTC"
+          },
+          {
+            "id": "15",
+            "seq": "AGAAGA"
+          },
+          {
+            "id": "16",
+            "seq": "AGCATC"
+          },
+          {
+            "id": "17",
+            "seq": "AGGCCG"
+          },
+          {
+            "id": "18",
+            "seq": "ATACGG"
+          },
+          {
+            "id": "19",
+            "seq": "ATCCTA"
+          },
+          {
+            "id": "20",
+            "seq": "ATCTAT"
+          },
+          {
+            "id": "21",
+            "seq": "ATGAGC"
+          },
+          {
+            "id": "22",
+            "seq": "CATTTT"
+          },
+          {
+            "id": "23",
+            "seq": "CCGCAA"
+          },
+          {
+            "id": "24",
+            "seq": "CTCAGA"
+          },
+          {
+            "id": "25",
+            "seq": "GAATAA"
+          },
+          {
+            "id": "26",
+            "seq": "GCCGCG"
+          },
+          {
+            "id": "27",
+            "seq": "GCTCCA"
+          },
+          {
+            "id": "28",
+            "seq": "GGCACA"
+          },
+          {
+            "id": "29",
+            "seq": "GGCCTG"
+          },
+          {
+            "id": "30",
+            "seq": "TCGGCA"
+          },
+          {
+            "id": "31",
+            "seq": "TCTACC"
+          },
+          {
+            "id": "32",
+            "seq": "TGCCAT"
+          },
+          {
+            "id": "33",
+            "seq": "TGCTGG"
+          },
+          {
+            "id": "34",
+            "seq": "AGGTTT"
+          },
+          {
+            "id": "35",
+            "seq": "AGTCAA"
+          },
+          {
+            "id": "36",
+            "seq": "AGTTCC"
+          },
+          {
+            "id": "37",
+            "seq": "ATGTCA"
+          },
+          {
+            "id": "38",
+            "seq": "CCGTCC"
+          },
+          {
+            "id": "39",
+            "seq": "GTAGAG"
+          },
+          {
+            "id": "40",
+            "seq": "GTGAAA"
+          },
+          {
+            "id": "41",
+            "seq": "GTGGCC"
+          },
+          {
+            "id": "42",
+            "seq": "GTTTCG"
+          },
+          {
+            "id": "43",
+            "seq": "CGTACG"
+          },
+          {
+            "id": "44",
+            "seq": "GAGTGG"
+          },
+          {
+            "id": "45",
+            "seq": "GGTAGC"
+          },
+          {
+            "id": "46",
+            "seq": "ACTTGA"
+          },
+          {
+            "id": "47",
+            "seq": "CAGATC"
+          },
+          {
+            "id": "48",
+            "seq": "GCCAAT"
+          },
+          {
+            "id": "49",
+            "seq": "TAGCTT"
+          },
+          {
+            "id": "50",
+            "seq": "TTAGGC"
+          },
+          {
+            "id": "51",
+            "seq": "AACCGCC"
+          },
+          {
+            "id": "52",
+            "seq": "AACGAAC"
+          },
+          {
+            "id": "53",
+            "seq": "AACGCCT"
+          },
+          {
+            "id": "54",
+            "seq": "AACGGTA"
+          },
+          {
+            "id": "55",
+            "seq": "AACTAGT"
+          },
+          {
+            "id": "56",
+            "seq": "AACTGAG"
+          },
+          {
+            "id": "57",
+            "seq": "AAGAATT"
+          },
+          {
+            "id": "58",
+            "seq": "AAGATAG"
+          },
+          {
+            "id": "59",
+            "seq": "AAGCTCT"
+          },
+          {
+            "id": "60",
+            "seq": "AAGTCTG"
+          },
+          {
+            "id": "61",
+            "seq": "AATAACC"
+          },
+          {
+            "id": "62",
+            "seq": "AATCCGT"
+          },
+          {
+            "id": "63",
+            "seq": "ACCGATT"
+          },
+          {
+            "id": "64",
+            "seq": "ACCGTAG"
+          },
+          {
+            "id": "65",
+            "seq": "ACCTCAT"
+          },
+          {
+            "id": "66",
+            "seq": "ACCTTGC"
+          },
+          {
+            "id": "67",
+            "seq": "ACGACCT"
+          },
+          {
+            "id": "68",
+            "seq": "ACGATTC"
+          },
+          {
+            "id": "69",
+            "seq": "ACGCGGC"
+          },
+          {
+            "id": "70",
+            "seq": "ACGGAGG"
+          },
+          {
+            "id": "71",
+            "seq": "ACGTAAC"
+          },
+          {
+            "id": "72",
+            "seq": "ACTACTG"
+          },
+          {
+            "id": "73",
+            "seq": "ACTCGTT"
+          },
+          {
+            "id": "74",
+            "seq": "ACTGCGC"
+          },
+          {
+            "id": "75",
+            "seq": "AGACCTC"
+          },
+          {
+            "id": "76",
+            "seq": "AGACTAG"
+          },
+          {
+            "id": "77",
+            "seq": "AGAGACC"
+          },
+          {
+            "id": "78",
+            "seq": "AGAGCGT"
+          },
+          {
+            "id": "79",
+            "seq": "AGATATG"
+          },
+          {
+            "id": "80",
+            "seq": "AGATTCT"
+          },
+          {
+            "id": "81",
+            "seq": "AGCAAGC"
+          },
+          {
+            "id": "82",
+            "seq": "AGCAGTT"
+          },
+          {
+            "id": "83",
+            "seq": "AGCGCTG"
+          },
+          {
+            "id": "84",
+            "seq": "AGTATAC"
+          },
+          {
+            "id": "85",
+            "seq": "ATAAGTC"
+          },
+          {
+            "id": "86",
+            "seq": "ATAATGG"
+          },
+          {
+            "id": "87",
+            "seq": "ATACTCC"
+          },
+          {
+            "id": "88",
+            "seq": "ATAGAAG"
+          },
+          {
+            "id": "89",
+            "seq": "ATCTCCG"
+          },
+          {
+            "id": "90",
+            "seq": "ATGCAGT"
+          },
+          {
+            "id": "91",
+            "seq": "ATGGTAT"
+          },
+          {
+            "id": "92",
+            "seq": "ATTATCT"
+          },
+          {
+            "id": "93",
+            "seq": "ATTCGAC"
+          },
+          {
+            "id": "94",
+            "seq": "ATTGCTA"
+          },
+          {
+            "id": "95",
+            "seq": "CAACCGG"
+          },
+          {
+            "id": "96",
+            "seq": "CAACTAA"
+          },
+          {
+            "id": "97",
+            "seq": "AATCTTC"
+          },
+          {
+            "id": "98",
+            "seq": "ACCAACG"
+          },
+          {
+            "id": "99",
+            "seq": "AGATGGC"
+          },
+          {
+            "id": "100",
+            "seq": "CCAGGTT"
+          },
+          {
+            "id": "101",
+            "seq": "CCGTTAG"
+          },
+          {
+            "id": "102",
+            "seq": "CGCCTCT"
+          },
+          {
+            "id": "103",
+            "seq": "CTTGCGG"
+          },
+          {
+            "id": "104",
+            "seq": "GGCGGAG"
+          },
+          {
+            "id": "105",
+            "seq": "TGGACGT"
+          },
+          {
+            "id": "106",
+            "seq": "AACCATG"
+          },
+          {
+            "id": "107",
+            "seq": "CAGGAAG"
+          },
+          {
+            "id": "108",
+            "seq": "CATACCT"
+          },
+          {
+            "id": "109",
+            "seq": "CCAATCC"
+          },
+          {
+            "id": "110",
+            "seq": "CCGGCGT"
+          },
+          {
+            "id": "111",
+            "seq": "CGCATAG"
+          },
+          {
+            "id": "112",
+            "seq": "CGTAATC"
+          },
+          {
+            "id": "113",
+            "seq": "CGTTGGT"
+          },
+          {
+            "id": "114",
+            "seq": "CTATACG"
+          },
+          {
+            "id": "115",
+            "seq": "GACCTAC"
+          },
+          {
+            "id": "116",
+            "seq": "GATATTG"
+          },
+          {
+            "id": "117",
+            "seq": "AAGACGC"
+          },
+          {
+            "id": "118",
+            "seq": "GCAGTAT"
+          },
+          {
+            "id": "119",
+            "seq": "GGTCCGC"
+          },
+          {
+            "id": "120",
+            "seq": "GTCGACT"
+          },
+          {
+            "id": "121",
+            "seq": "GTTAGAT"
+          },
+          {
+            "id": "122",
+            "seq": "TAACTCG"
+          },
+          {
+            "id": "123",
+            "seq": "TGCTTCC"
+          },
+          {
+            "id": "124",
+            "seq": "TGGCGCT"
+          },
+          {
+            "id": "125",
+            "seq": "AATGGCG"
+          },
+          {
+            "id": "126",
+            "seq": "ACCAGAC"
+          },
+          {
+            "id": "127",
+            "seq": "ACGCCAG"
+          },
+          {
+            "id": "128",
+            "seq": "ACTAAGT"
+          },
+          {
+            "id": "129",
+            "seq": "AGAACCG"
+          },
+          {
+            "id": "130",
+            "seq": "ATCGTTC"
+          },
+          {
+            "id": "131",
+            "seq": "CAACGTC"
+          },
+          {
+            "id": "t1",
+            "seq": "ATCACG"
+          },
+          {
+            "id": "t2",
+            "seq": "CGATGT"
+          },
+          {
+            "id": "t3",
+            "seq": "TTAGGC"
+          },
+          {
+            "id": "t4",
+            "seq": "TGACCA"
+          },
+          {
+            "id": "t5",
+            "seq": "ACAGTG"
+          },
+          {
+            "id": "t6",
+            "seq": "GCCAAT"
+          },
+          {
+            "id": "t7",
+            "seq": "CAGATC"
+          },
+          {
+            "id": "t8",
+            "seq": "ACTTGA"
+          },
+          {
+            "id": "t9",
+            "seq": "GATCAG"
+          },
+          {
+            "id": "t10",
+            "seq": "TAGCTT"
+          },
+          {
+            "id": "t11",
+            "seq": "GGCTAC"
+          },
+          {
+            "id": "t12",
+            "seq": "CTTGTA"
+          },
+          {
+            "id": "t13",
+            "seq": "AGTCAA"
+          },
+          {
+            "id": "t14",
+            "seq": "AGTTCC"
+          },
+          {
+            "id": "t15",
+            "seq": "ATGTCA"
+          },
+          {
+            "id": "t16",
+            "seq": "CCGTCC"
+          },
+          {
+            "id": "t18",
+            "seq": "GTCCGC"
+          },
+          {
+            "id": "t19",
+            "seq": "GTGAAA"
+          },
+          {
+            "id": "t20",
+            "seq": "GTGGCC"
+          },
+          {
+            "id": "t21",
+            "seq": "GTTTCG"
+          },
+          {
+            "id": "t22",
+            "seq": "CGTACG"
+          },
+          {
+            "id": "t23",
+            "seq": "GAGTGG"
+          },
+          {
+            "id": "t25",
+            "seq": "ACTGAT"
+          },
+          {
+            "id": "t27",
+            "seq": "ATTCCT"
+          }
+        ]
+      },
+      "p5indices": {
+        "p5index": [
+          {
+            "id": "1",
+            "seq": "TCGCAGG"
+          },
+          {
+            "id": "2",
+            "seq": "CTCTGCA"
+          },
+          {
+            "id": "3",
+            "seq": "CCTAGGT"
+          },
+          {
+            "id": "4",
+            "seq": "GGATCAA"
+          },
+          {
+            "id": "5",
+            "seq": "GCAAGAT"
+          },
+          {
+            "id": "6",
+            "seq": "ATGGAGA"
+          },
+          {
+            "id": "7",
+            "seq": "CTCGATG"
+          },
+          {
+            "id": "8",
+            "seq": "GCTCGAA"
+          },
+          {
+            "id": "9",
+            "seq": "ACCAACT"
+          },
+          {
+            "id": "10",
+            "seq": "CCGGTAC"
+          },
+          {
+            "id": "11",
+            "seq": "AACTCCG"
+          },
+          {
+            "id": "12",
+            "seq": "TTGAAGT"
+          },
+          {
+            "id": "13",
+            "seq": "ACTATCA"
+          },
+          {
+            "id": "14",
+            "seq": "TTGGATC"
+          },
+          {
+            "id": "15",
+            "seq": "CGACCTG"
+          },
+          {
+            "id": "16",
+            "seq": "TAATGCG"
+          },
+          {
+            "id": "17",
+            "seq": "AGGTACC"
+          },
+          {
+            "id": "18",
+            "seq": "TGCGTCC"
+          },
+          {
+            "id": "19",
+            "seq": "GAATCTC"
+          },
+          {
+            "id": "20",
+            "seq": "CATGCTC"
+          },
+          {
+            "id": "21",
+            "seq": "ACGCAAC"
+          },
+          {
+            "id": "22",
+            "seq": "GCATTGG"
+          },
+          {
+            "id": "23",
+            "seq": "GATCTCG"
+          },
+          {
+            "id": "24",
+            "seq": "CAATATG"
+          },
+          {
+            "id": "25",
+            "seq": "TGACGTC"
+          },
+          {
+            "id": "26",
+            "seq": "GATGCCA"
+          },
+          {
+            "id": "27",
+            "seq": "CAATTAC"
+          },
+          {
+            "id": "28",
+            "seq": "AGATAGG"
+          },
+          {
+            "id": "29",
+            "seq": "CCGATTG"
+          },
+          {
+            "id": "30",
+            "seq": "ATGCCGC"
+          },
+          {
+            "id": "31",
+            "seq": "CAGTACT"
+          },
+          {
+            "id": "32",
+            "seq": "AATAGTA"
+          },
+          {
+            "id": "33",
+            "seq": "CATCCGG"
+          },
+          {
+            "id": "34",
+            "seq": "TCATGGT"
+          },
+          {
+            "id": "35",
+            "seq": "AGAACCG"
+          },
+          {
+            "id": "36",
+            "seq": "TGGAATA"
+          },
+          {
+            "id": "37",
+            "seq": "CAGGAGG"
+          },
+          {
+            "id": "38",
+            "seq": "AATACCT"
+          },
+          {
+            "id": "39",
+            "seq": "CGAATGC"
+          },
+          {
+            "id": "40",
+            "seq": "TTCGCAA"
+          },
+          {
+            "id": "41",
+            "seq": "AATTCAA"
+          },
+          {
+            "id": "42",
+            "seq": "CGCGCAG"
+          },
+          {
+            "id": "43",
+            "seq": "AAGGTCT"
+          },
+          {
+            "id": "44",
+            "seq": "ACTGGAC"
+          },
+          {
+            "id": "45",
+            "seq": "AGCAGGT"
+          },
+          {
+            "id": "46",
+            "seq": "GTACCGG"
+          },
+          {
+            "id": "47",
+            "seq": "GGTCAAG"
+          },
+          {
+            "id": "48",
+            "seq": "AATGATG"
+          },
+          {
+            "id": "49",
+            "seq": "AGTCAGA"
+          },
+          {
+            "id": "50",
+            "seq": "AACTAGA"
+          },
+          {
+            "id": "51",
+            "seq": "CTATGGC"
+          },
+          {
+            "id": "52",
+            "seq": "CGACGGT"
+          },
+          {
+            "id": "53",
+            "seq": "AACCAAG"
+          },
+          {
+            "id": "54",
+            "seq": "CGGCGTA"
+          },
+          {
+            "id": "55",
+            "seq": "GCAGTCC"
+          },
+          {
+            "id": "56",
+            "seq": "CTCGCGC"
+          },
+          {
+            "id": "57",
+            "seq": "CTGCGAC"
+          },
+          {
+            "id": "58",
+            "seq": "ACGTATG"
+          },
+          {
+            "id": "59",
+            "seq": "ATACTGA"
+          },
+          {
+            "id": "60",
+            "seq": "TACTTAG"
+          },
+          {
+            "id": "61",
+            "seq": "AAGCTAA"
+          },
+          {
+            "id": "62",
+            "seq": "GACGGCG"
+          },
+          {
+            "id": "63",
+            "seq": "AGAAGAC"
+          },
+          {
+            "id": "64",
+            "seq": "GTCCGGC"
+          },
+          {
+            "id": "65",
+            "seq": "TCAGCTT"
+          },
+          {
+            "id": "66",
+            "seq": "AGAGCGC"
+          },
+          {
+            "id": "67",
+            "seq": "GCCTACG"
+          },
+          {
+            "id": "68",
+            "seq": "TAATCAT"
+          },
+          {
+            "id": "69",
+            "seq": "AACCTGC"
+          },
+          {
+            "id": "70",
+            "seq": "GACGATT"
+          },
+          {
+            "id": "71",
+            "seq": "TAGGCCG"
+          },
+          {
+            "id": "72",
+            "seq": "GGCATAG"
+          },
+          {
+            "id": "73",
+            "seq": "TTCAACC"
+          },
+          {
+            "id": "74",
+            "seq": "TTAACTC"
+          },
+          {
+            "id": "75",
+            "seq": "TAGTCTA"
+          },
+          {
+            "id": "76",
+            "seq": "TGCATGA"
+          },
+          {
+            "id": "77",
+            "seq": "AATAAGC"
+          },
+          {
+            "id": "78",
+            "seq": "AGCCTTG"
+          },
+          {
+            "id": "79",
+            "seq": "CCAACCT"
+          },
+          {
+            "id": "80",
+            "seq": "GCAGAAG"
+          },
+          {
+            "id": "81",
+            "seq": "AGAATTA"
+          },
+          {
+            "id": "82",
+            "seq": "CAGCATC"
+          },
+          {
+            "id": "83",
+            "seq": "TTCTAGG"
+          },
+          {
+            "id": "84",
+            "seq": "CCTCTAG"
+          },
+          {
+            "id": "85",
+            "seq": "CCGGATA"
+          },
+          {
+            "id": "86",
+            "seq": "GCCGCCT"
+          },
+          {
+            "id": "87",
+            "seq": "AACGACC"
+          },
+          {
+            "id": "88",
+            "seq": "CCAGCGG"
+          },
+          {
+            "id": "89",
+            "seq": "TAGTTCC"
+          },
+          {
+            "id": "90",
+            "seq": "TGGCAAT"
+          },
+          {
+            "id": "91",
+            "seq": "CGTATAT"
+          },
+          {
+            "id": "92",
+            "seq": "GCTAATC"
+          },
+          {
+            "id": "93",
+            "seq": "GACTTCT"
+          },
+          {
+            "id": "94",
+            "seq": "GTACTAT"
+          },
+          {
+            "id": "95",
+            "seq": "CGAGATC"
+          },
+          {
+            "id": "96",
+            "seq": "CGCAGCC"
+          },
+          {
+            "id": "is4",
+            "seq": "AGATCTC"
+          },
+          {
+            "id": "t1",
+            "seq": "ATCACG"
+          },
+          {
+            "id": "t2",
+            "seq": "CGATGT"
+          },
+          {
+            "id": "t3",
+            "seq": "TTAGGC"
+          },
+          {
+            "id": "t4",
+            "seq": "TGACCA"
+          },
+          {
+            "id": "t5",
+            "seq": "ACAGTG"
+          },
+          {
+            "id": "t6",
+            "seq": "GCCAAT"
+          },
+          {
+            "id": "t7",
+            "seq": "CAGATC"
+          },
+          {
+            "id": "t8",
+            "seq": "ACTTGA"
+          },
+          {
+            "id": "t9",
+            "seq": "GATCAG"
+          },
+          {
+            "id": "t10",
+            "seq": "TAGCTT"
+          },
+          {
+            "id": "t11",
+            "seq": "GGCTAC"
+          },
+          {
+            "id": "t12",
+            "seq": "CTTGTA"
+          },
+          {
+            "id": "t13",
+            "seq": "AGTCAA"
+          },
+          {
+            "id": "t14",
+            "seq": "AGTTCC"
+          },
+          {
+            "id": "t15",
+            "seq": "ATGTCA"
+          },
+          {
+            "id": "t16",
+            "seq": "CCGTCC"
+          },
+          {
+            "id": "t18",
+            "seq": "GTCCGC"
+          },
+          {
+            "id": "t19",
+            "seq": "GTGAAA"
+          },
+          {
+            "id": "t20",
+            "seq": "GTGGCC"
+          },
+          {
+            "id": "t21",
+            "seq": "GTTTCG"
+          },
+          {
+            "id": "t22",
+            "seq": "CGTACG"
+          },
+          {
+            "id": "t23",
+            "seq": "GAGTGG"
+          },
+          {
+            "id": "t25",
+            "seq": "ACTGAT"
+          },
+          {
+            "id": "t27",
+            "seq": "ATTCCT"
+          }
+        ]
+      }
+    }
+}
+

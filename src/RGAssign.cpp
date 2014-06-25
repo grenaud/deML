@@ -37,12 +37,12 @@ void setFileForRGQual(ofstream * streamFile){
 
 // Returns log10( pow(10,x)+pow(10,y) ), but does so without causing
 // overflow or loss of precision.
-double oplus( double x, double y )
-{
-    return x > y 
-        ? x + log1p( pow( 10, y-x ) ) / log(10)
-        : y + log1p( pow( 10, x-y ) ) / log(10) ;
-}
+// double oplus( double x, double y )
+// {
+//     return x > y 
+//         ? x + log1p( pow( 10, y-x ) ) / log(10)
+//         : y + log1p( pow( 10, x-y ) ) / log(10) ;
+// }
 
 
 // compare by likelihood (second component).  since likelihoods are

@@ -9,8 +9,8 @@ QUESTIONS :
 About
 ----------------------
 
-deML is a program for maximum likelihood demultiplexing program
-for next-generation sequencing data. 
+deML is a program for maximum likelihood demultiplexing
+of next-generation sequencing data. 
 
 
 Downloading:
@@ -51,23 +51,34 @@ To launch the program simply type:
     src/deML
 
 
-Test data:
-----------------------
-
-For raw BAM files:
-
-    src/deML -i testData/index.txt -o testData/demultiplexed.bam testData/todemultiplex.bam
-
-For FASTQ files
-
-    src/deML -i testData/index.txt -f testData/todemultiplex.fq1.gz  -r testData/todemultiplex.fq2.gz -if1 testData/todemultiplex.i1.gz  -if2 testData/todemultiplex.i2.gz  -o testData/demultiplex
 
 
--o testData/demultiplexed.bam testData/todemultiplex.bam
+
 
  
 Format for input
 ----------------------
+
+The two main inputs that are required are the 
+
+1) Input sequences
+2) Indices used in the experiment
+
+----  Input sequences  ----
+
+deML needs your sequences along with the sequenced index in either two formats:
+
+a) BAM where the first index is specified as the XI tag and the quality as YI. 
+   XJ and YJ contain the sequence and quality for the second index if it's there
+
+b) fastq file where the forward reads are in one file, reverse in another file.
+   The index must be in fastq format. If a second index is present, it must be in its own
+   file. If you lost the quality information for the indices (they are present in the defline
+   but no quality), you can still use deML but it will not provide optimal results. 
+   Use a baseline quality for the bases of the index.
+
+
+----  Indices used in the experiment  ----
 
 You can either specify the actual sequences used for multiplexing:
 
@@ -95,10 +106,23 @@ or you can also specify the raw indices:
 348	40	RG8
 349	41	RG9
 
-Explanation for the scores
+However, these numbers must match those in the webform/config.json file. You can alwys modify that file if you use different indices.
+
+
+Test data:
 ----------------------
 
+For raw BAM files:
 
+    src/deML -i testData/index.txt -o testData/demultiplexed.bam testData/todemultiplex.bam
+
+For FASTQ files
+
+    src/deML -i testData/index.txt -f testData/todemultiplex.fq1.gz  -r testData/todemultiplex.fq2.gz -if1 testData/todemultiplex.i1.gz  -if2 testData/todemultiplex.i2.gz   -o testData/demultiplexed.bam testData/todemultiplex.bam
+
+
+Explanation for the scores
+----------------------
 
 deML works by computing the likelihood of stemming from potential samples and assigns a read to the most likely sample. To measure the confidence in the assignment, deML reports 3 different scores (Z_0, Z_1 and Z_2). If you have BAM as input, the output BAM file will include 3 different flags. 
 
@@ -131,5 +155,5 @@ Z_2  = 10* log_10 |   ------------------------------ |
                   |   SUM_{i==j} ( P7_i) (P5_j)  )   |
 
 
-An approximation is made to speed up computations.  The higher the Z_2 score, the higher the odds ratio of mispairing and the lower the confidence. This score is not reported for runs with single indices and where the ratio is less than 0 thus making the mispairing scenario unlikely.  
+An approximation is made to speed up computations.  The higher the Z_2 score, the higher the odds ratio of mispairing and the lower the confidence. This score is not reported for runs with single indices and where the log ratio is less than 0 thus making the mispairing scenario unlikely.  
 
