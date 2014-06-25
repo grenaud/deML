@@ -118,7 +118,7 @@ For raw BAM files:
 
 For FASTQ files
 
-    src/deML -i testData/index.txt -f testData/todemultiplex.fq1.gz  -r testData/todemultiplex.fq2.gz -if1 testData/todemultiplex.i1.gz  -if2 testData/todemultiplex.i2.gz   -o testData/demultiplexed.bam testData/todemultiplex.bam
+    src/deML -i testData/index.txt -f testData/todemultiplex.fq1.gz  -r testData/todemultiplex.fq2.gz -if1 testData/todemultiplex.i1.gz  -if2 testData/todemultiplex.i2.gz   -o testData/demultiplexed.
 
 
 Explanation for the scores
