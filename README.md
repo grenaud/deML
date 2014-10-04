@@ -16,7 +16,8 @@ of next-generation sequencing data.
 Downloading:
 ----------------------
 
-Go to https://github.com/grenaud/deML and either:
+
+Make sure you have zlib.h installed. Go to https://github.com/grenaud/deML and either:
 
 1) Download ZIP 
 
@@ -25,13 +26,17 @@ or
 2) Do a "git clone --recursive https://github.com/grenaud/deML.git"
 
 
-Installation:
+Installation for unix based systems :
 ----------------------
+
+Mac users need to use the terminal to install and run deML.
 
 1) make sure you have "cmake" and "git" installed, check for it by typing " git --version" and "cmake --version"
 
 2) Build the submodules and main code by typing :
     make
+
+
 
 
 
