@@ -49,7 +49,7 @@ void setFileForRGQual(ofstream * streamFile);
 
 indexData intern_readIndex(string filename);
 map<string,string>  readIndexFile(string filename,int mismatchesTrie,bool _shiftByOne);
-rgAssignment assignReadGroup(string  & index1,string & index1q,string & index2,string & index2q,double rgScoreCutoff,double fracConflict,int mismatchesTrie);
+rgAssignment assignReadGroup(string  & index1,string & index1q,string & index2,string & index2q,double rgScoreCutoff,double fracConflict,int mismatchesTrie,int qualOffset=33);
 void deallocate();
 
 /* static double cutoffRatioLogLike=0.5; */

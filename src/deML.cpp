@@ -17,8 +17,6 @@
 #include "PutProgramInHeader.h"
 #include "FastQParser.h"
 
-
-
 #include "JSON.h"
 #include "utils.h"
 
@@ -54,6 +52,7 @@ struct tallyForRG{
     unsigned int wrong;    
 };
 
+int qualOffset=33;
 
 static double rgScoreCutoff  = 80 ;             // two HQ bases can mismatch
 static double fracConflict   = 20 ;             // top shall be 100x more likely
@@ -497,7 +496,7 @@ void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError
 
     getIndices(al,index1,index1Q,index2,index2Q);
 
-    rgAssignment rgReturn=assignReadGroup(index1,index1Q,index2,index2Q,rgScoreCutoff,fracConflict,mismatchesTrie);
+    rgAssignment rgReturn=assignReadGroup(index1,index1Q,index2,index2Q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
     check_thresholds( rgReturn ) ;
 
     updateRecord(al,rgReturn);
@@ -541,7 +540,7 @@ void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writ
     if(index2 !=sindex2 ){cerr<<"Seq#1 has a different index 2 than seq #2, exiting "        <<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
     if(index2Q!=sindex2Q){cerr<<"Seq#1 has a different index 2 quality than seq #2, exiting "<<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
 
-    rgAssignment rgReturn = assignReadGroup(index1,index1Q,index2,index2Q,rgScoreCutoff,fracConflict,mismatchesTrie);
+    rgAssignment rgReturn = assignReadGroup(index1,index1Q,index2,index2Q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
     check_thresholds( rgReturn ) ;
 
     updateRecord(al, rgReturn);
@@ -682,7 +681,7 @@ void processFastq(string forwardfq,
 	}
 
 	
-	rgAssignment rgReturn = assignReadGroup(index1s,index1q,index2s,index2q,rgScoreCutoff,fracConflict,mismatchesTrie);
+	rgAssignment rgReturn = assignReadGroup(index1s,index1q,index2s,index2q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
 	check_thresholds( rgReturn ) ;
 	string predictedGroup;
 	
@@ -854,12 +853,14 @@ int main (int argc, char *argv[]) {
 			      "\t\t"+"You can specify fastq as input/output, in which case the -o option will be"+"\n"+
 			      "\t\t"+"treated as an output prefix"+"\n"+
 			      
-			      "\t\t"+"-f"  +"\t[forward fastq]"+"\t\t"+""+"Forward reads in fastq\n"+
-			      "\t\t"+"-r"  +"\t[reverse fastq]"+"\t\t"+""+"Reverse reads in fastq\n"+
+			      "\t\t"+"-f"  +"\t[forward fastq]"+"\t\t\t"+""+"Forward reads in fastq\n"+
+			      "\t\t"+"-r"  +"\t[reverse fastq]"+"\t\t\t"+""+"Reverse reads in fastq\n"+
 			      "\t\t"+"-if1"  +"\t[index1 file fastq]"+"\t\t"+""+"First index sequences in fastq\n"+
 			      "\t\t"+"-if2"  +"\t[index2 file fastq]"+"\t\t"+""+"Second index sequences in fastq\n"+
 			      
 			      "\tCutoffs options:"+"\n"
+			      "\t\t"+"--phred64"  +"\t"+"\t\t\t"+""+"Use PHRED 64 as the offset for QC scores (default : PHRED33)"+"\n"+
+
 			      "\t\t"+"--rgqual"  +"\t[quality]"+"\t\t"+""+"Worst quality before flagging as unknown ["+stringify(rgScoreCutoff)+"]\n"+
 			      "\t\t"+"--fracconf"+"\t[quality]"+"\t\t"+""+"Maximum quality difference considered a conflict ["+stringify(fracConflict)+"] \n"+
 			      "\t\t"+"--wrongness"+"\t[quality]"+"\t\t"+""+"Mininum quality difference to flag as wrongly paired ["+stringify(wrongness)+"] \n"+
@@ -917,6 +918,11 @@ int main (int argc, char *argv[]) {
 	    i++;
 	    continue;
 	}
+
+	if(string(argv[i]) == "--phred64"  ){
+            qualOffset=64;
+            continue;
+        }
 
 	if(strcmp(argv[i],"-if2") == 0 ){
 	    index2fq = string(argv[i+1]);
