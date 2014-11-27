@@ -443,7 +443,7 @@ void readIndexNumbers(string configFile){
 }
 
 
-void printUnfoundToFile(vector< pair<string,int> > * unfound,ofstream & fileError){
+void printUnfoundToFile(vector< pair<string,int> > * unfound,ofstream & fileError,const bool  printErrorJSONabsent){
 
     for(int i=0;i<min(int(unfound->size()),maxErrorHits);i++){	       
 	//Searching in known strings
@@ -452,16 +452,16 @@ void printUnfoundToFile(vector< pair<string,int> > * unfound,ofstream & fileErro
 	for(unsigned int j=0;j<temp.size();j++){
 	    vector<string> * temp3=new vector<string>();
 	    vector<string> * temp4=new vector<string>();
+	    if(!printErrorJSONabsent){
+		trieKnownString->searchMismatch(temp[j].c_str(),temp3,0);
+		trieKnownString->searchMismatch( ( "N"+temp[j].substr(0, temp[j].size() -1)     ).c_str(),temp4,1);
+		trieKnownString->searchMismatch( (     temp[j].substr(1, temp[j].size() -1)+"N" ).c_str(),temp4,1);
 
-	    trieKnownString->searchMismatch(temp[j].c_str(),temp3,0);
-	    trieKnownString->searchMismatch( ( "N"+temp[j].substr(0, temp[j].size() -1)     ).c_str(),temp4,1);
-	    trieKnownString->searchMismatch( (     temp[j].substr(1, temp[j].size() -1)+"N" ).c_str(),temp4,1);
-
-	    //adding a tag before the shifted ones
-	    for(unsigned int k=0;k<temp4->size();k++)
-		(*temp4)[k]="SHFT#"+(*temp4)[k];
-	    temp3->insert( temp3->end(), temp4->begin(), temp4->end() );
-
+		//adding a tag before the shifted ones
+		for(unsigned int k=0;k<temp4->size();k++)
+		    (*temp4)[k]="SHFT#"+(*temp4)[k];
+		temp3->insert( temp3->end(), temp4->begin(), temp4->end() );
+	    }
 	    if(temp3->size() == 0 && temp4->size() == 0){
 		temp2.push_back( "?");
 	    }else{
@@ -558,19 +558,24 @@ void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writ
             keyIndex=index1+"#"+index2;
         }
 
-        if( rgReturn.conflict ) conflictSeq[ keyIndex ] += 2;
-        if( rgReturn.unknown  ) unknownSeq [ keyIndex ] += 2;
-        if( rgReturn.wrong    ) wrongSeq   [ keyIndex ] += 2;
+        if( rgReturn.conflict ) conflictSeq[ keyIndex ] += 1;
+        if( rgReturn.unknown  ) unknownSeq [ keyIndex ] += 1;
+        if( rgReturn.wrong    ) wrongSeq   [ keyIndex ] += 1;
     }
 }
 
 
 
-void processFastq(string forwardfq,
-		  string reversefq,
-		  string index1fq,
-		  string index2fq,
-		  string prefixOut){
+void processFastq(string           forwardfq,
+		  string           reversefq,
+		  string           index1fq,
+		  string           index2fq,
+		  string           prefixOut,
+		  map<string,int> &unknownSeq, 
+		  map<string,int> &wrongSeq, 
+		  map<string,int> &conflictSeq,
+		  const bool       printSummary,
+		  const bool       printError){
     
     FastQParser * fqpf=0;
     FastQParser * fqpr=0;
@@ -685,7 +690,47 @@ void processFastq(string forwardfq,
 	rgAssignment rgReturn = assignReadGroup(index1s,index1q,index2s,index2q,rgScoreCutoff,fracConflict,mismatchesTrie);
 	check_thresholds( rgReturn ) ;
 	string predictedGroup;
+
+
+	//////////////////////////
+	//BEGIN update counters //
+	//////////////////////////
+	if(printSummary){
+
+
+	    string predictedGroup=rgReturn.predictedGroup;
+	    //will overwrite the RG
+	    bool assigned=true;
+	    if( rgReturn.predictedGroup.empty() ) {
+		predictedGroup="unknown";
+	    }
+	    bool incrInTally=false;
+	    if( rgReturn.conflict ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].conflict++; incrInTally=true;}  }
+	    if( rgReturn.wrong    ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].wrong++;    incrInTally=true;}  }
+	    if( rgReturn.unknown  ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].unknown++;  incrInTally=true;}  }
+	    if(assigned){
+		namesMap[predictedGroup].assigned++;
+	    }
+	}
 	
+
+	if(printError){
+	    string keyIndex;
+	    if(!hasId2Bool){
+		keyIndex=index1s;
+	    }else{
+		keyIndex=index1s+"#"+index2s;
+	    }
+
+	    if( rgReturn.conflict ) conflictSeq[ keyIndex ] += 1;
+	    if( rgReturn.unknown  ) unknownSeq [ keyIndex ] += 1;
+	    if( rgReturn.wrong    ) wrongSeq   [ keyIndex ] += 1;
+	}
+	//////////////////////////
+	//  END update counters //
+	//////////////////////////
+
+
 	if( rgReturn.predictedGroup.empty() ) {
 	    predictedGroup="unknown";
 	}else{
@@ -826,6 +871,8 @@ int main (int argc, char *argv[]) {
     string filenameSummary;
 
     bool   printError=false;
+    bool   printErrorJSONabsent=false;
+
     string filenameError;
 
     ofstream ratioValuesOS;
@@ -854,8 +901,8 @@ int main (int argc, char *argv[]) {
 			      "\t\t"+"You can specify fastq as input/output, in which case the -o option will be"+"\n"+
 			      "\t\t"+"treated as an output prefix"+"\n"+
 			      
-			      "\t\t"+"-f"  +"\t[forward fastq]"+"\t\t"+""+"Forward reads in fastq\n"+
-			      "\t\t"+"-r"  +"\t[reverse fastq]"+"\t\t"+""+"Reverse reads in fastq\n"+
+			      "\t\t"+"-f"  +"\t[forward fastq]"+"\t\t\t"+""+"Forward reads in fastq\n"+
+			      "\t\t"+"-r"  +"\t[reverse fastq]"+"\t\t\t"+""+"Reverse reads in fastq\n"+
 			      "\t\t"+"-if1"  +"\t[index1 file fastq]"+"\t\t"+""+"First index sequences in fastq\n"+
 			      "\t\t"+"-if2"  +"\t[index2 file fastq]"+"\t\t"+""+"Second index sequences in fastq\n"+
 			      
@@ -1071,6 +1118,7 @@ int main (int argc, char *argv[]) {
 	return 1;             
     }
 
+
     if(printError){
 	trieKnownString = new PrefixTree<string>();
 
@@ -1080,10 +1128,12 @@ int main (int argc, char *argv[]) {
 	    configFile = "/../webForm/config.json";
 	    if(!isFile( getCWD(argv[0])+configFile )){
 		cerr<<"ERROR: file "<<(getCWD(argv[0])+"/../../webForm/config.json")<<" or "<<(getCWD(argv[0])+"/../webForm/config.json")<<" were not found, this file is required with the -e or --error option"<<endl;
-		return 1;             
+		//return 1;             
 	    }
+	    printErrorJSONabsent=true;
+	}else{
+	    initializeKnownIndices(trieKnownString,getCWD(argv[0])+configFile);
 	}
-	initializeKnownIndices(trieKnownString,getCWD(argv[0])+configFile);
 	// //debug
 	// vector<string> * temp3=new vector<string>();
 	// vector<string> * temp4=new vector<string>();
@@ -1228,20 +1278,25 @@ int main (int argc, char *argv[]) {
 
 
     map<string,string> rgs =readIndexFile(indexStringFile,mismatchesTrie,shiftByOne);
-
+    map<string,int> unknownSeq;
+    map<string,int> wrongSeq;
+    map<string,int> conflictSeq;
+    
     if(useFastq){
-	
+
 	processFastq(forwardfq,
 		     reversefq,
 		     index1fq,
 		     index2fq,
-		     outfile);
+		     outfile,
+		     unknownSeq,
+		     wrongSeq,
+		     conflictSeq,
+		     printSummary,
+		     printError);
 
     }else{
 
-	map<string,int> unknownSeq;
-	map<string,int> wrongSeq;
-	map<string,int> conflictSeq;
 
 	if ( !reader.Open(bamFile) ) {
 	    cerr << "Could not open input BAM file  "<<bamFile << endl;
@@ -1327,93 +1382,95 @@ int main (int argc, char *argv[]) {
 
 
 
-	//Print summary of RG assignment
-	if(printSummary){
-	    map<string,tallyForRG>::iterator it;   
-	    unsigned int totalRG=0;	
-	    unsigned int totalAssignRG=0;	
-
-	    vector< pair<string,tallyForRG> > toprintVec;
-	    for ( it=namesMap.begin() ; it != namesMap.end(); it++ ){
-		toprintVec.push_back(  make_pair( it->first , it->second ) );
-		totalRG+=it->second.assigned+it->second.unknown+it->second.conflict+it->second.wrong;
-	    }
-
-	    sort (toprintVec.begin(),   toprintVec.end(),   compareNameTally() ); 
-	    ofstream fileSummary;
-	    fileSummary.open(filenameSummary.c_str());
-
-	    if (fileSummary.is_open()){
-
-		fileSummary << "RG\ttotal\ttotal%\tassigned\tassigned%\tunknown\tunknown%\tconflict\tconflict%\twrong\twrong%"<<endl;
-		fileSummary<<dashes<<endl;
-		for(unsigned int i=0;i<toprintVec.size();i++){		
-		    unsigned int totalForRQ=toprintVec[i].second.assigned+toprintVec[i].second.unknown+toprintVec[i].second.conflict+toprintVec[i].second.wrong;
-
-		    fileSummary << toprintVec[i].first << "\t" << totalForRQ << "\t"
-				<< 100.0*double(totalForRQ)/double(totalRG) << "%\t" ;
-
-		    fileSummary  << toprintVec[i].second.assigned << "\t"
-				 << 100.0*double(toprintVec[i].second.assigned)/double(totalForRQ) << "%\t" ;
-
-		    fileSummary  << toprintVec[i].second.unknown << "\t"
-				 << 100.0*double(toprintVec[i].second.unknown)/double(totalForRQ) << "%\t" ;
-
-		    fileSummary <<  toprintVec[i].second.conflict << "\t"
-				<< 100.0*double(toprintVec[i].second.conflict)/double(totalForRQ) << "%\t" ;
-
-		    fileSummary <<  toprintVec[i].second.wrong << "\t"
-				<< 100.0*double(toprintVec[i].second.wrong)/double(totalForRQ) << "%\n" ;
-		
-		    if(toprintVec[i].first != "unknown" )
-			totalAssignRG+=toprintVec[i].second.assigned;
-		}
-
-		fileSummary<<dashes<<endl;
-		fileSummary<<"ASSIGNED:\t"<< totalAssignRG<<"\t"<<100.0*double(totalAssignRG)/double(totalRG)<<"%"<<endl;
-		fileSummary<<"PROBLEMS:\t"<< (totalRG-totalAssignRG)<<"\t"<<100.0*double(totalRG-totalAssignRG)/double(totalRG)<<"%"<<endl;
-
-		fileSummary<<"TOTAL:\t"<<totalRG<<"\t100.0%"<<endl;
-	    }else{
-		cerr << "Unable to print to file "<<filenameSummary<<endl;
-	    }
-	    fileSummary.close();
-	}
 
 
-
-
-	//Print over-represented sequences in conflict,unknown,wrong
-	if(printError){
-	    vector< pair<string,int> > conflictToPrint( conflictSeq.begin(), conflictSeq.end() ) ;
-	    vector< pair<string,int> > unknownToPrint(  unknownSeq.begin(),  unknownSeq.end() ) ;
-	    vector< pair<string,int> > wrongToPrint(    wrongSeq.begin(),    wrongSeq.end() ) ;
-     	
-	    sort (conflictToPrint.begin(),   conflictToPrint.end(),   compareNameRG() ); 
-	    sort (unknownToPrint.begin(),    unknownToPrint.end(),    compareNameRG() ); 
-	    sort (wrongToPrint.begin(),      wrongToPrint.end(),      compareNameRG() ); 
-
-	    ofstream fileError;
-	    fileError.open(filenameError.c_str());
-	    if (fileError.is_open())
-		{
-		    fileError<<      dashes<<endl<<"Conflict:"<<endl<<dashes<<endl;
-		    printUnfoundToFile(&conflictToPrint,fileError);
-
-		    fileError<<endl<<dashes<<endl<<"Unknown:" <<endl<<dashes<<endl;
-		    printUnfoundToFile(&unknownToPrint,fileError);
-
-		    fileError<<endl<<dashes<<endl<<"Wrong:"   <<endl<<dashes<<endl;
-		    printUnfoundToFile(&wrongToPrint,fileError);
-		}else{
-		cerr << "Unable to print to file "<<filenameError<<endl;
-	    }
-	    fileError.close();
-	}
-
-
-    }
+    }//bam
     //cleaning up
+
+    //Print summary of RG assignment
+    if(printSummary){
+	map<string,tallyForRG>::iterator it;   
+	unsigned int totalRG=0;	
+	unsigned int totalAssignRG=0;	
+
+	vector< pair<string,tallyForRG> > toprintVec;
+	for ( it=namesMap.begin() ; it != namesMap.end(); it++ ){
+	    toprintVec.push_back(  make_pair( it->first , it->second ) );
+	    totalRG+=it->second.assigned+it->second.unknown+it->second.conflict+it->second.wrong;
+	}
+
+	sort (toprintVec.begin(),   toprintVec.end(),   compareNameTally() ); 
+	ofstream fileSummary;
+	fileSummary.open(filenameSummary.c_str());
+
+	if (fileSummary.is_open()){
+
+	    fileSummary << "RG\ttotal\ttotal%\tassigned\tassigned%\tunknown\tunknown%\tconflict\tconflict%\twrong\twrong%"<<endl;
+	    fileSummary<<dashes<<endl;
+	    for(unsigned int i=0;i<toprintVec.size();i++){		
+		unsigned int totalForRQ=toprintVec[i].second.assigned+toprintVec[i].second.unknown+toprintVec[i].second.conflict+toprintVec[i].second.wrong;
+
+		fileSummary << toprintVec[i].first << "\t" << totalForRQ << "\t"
+			    << 100.0*double(totalForRQ)/double(totalRG) << "%\t" ;
+
+		fileSummary  << toprintVec[i].second.assigned << "\t"
+			     << 100.0*double(toprintVec[i].second.assigned)/double(totalForRQ) << "%\t" ;
+
+		fileSummary  << toprintVec[i].second.unknown << "\t"
+			     << 100.0*double(toprintVec[i].second.unknown)/double(totalForRQ) << "%\t" ;
+
+		fileSummary <<  toprintVec[i].second.conflict << "\t"
+			    << 100.0*double(toprintVec[i].second.conflict)/double(totalForRQ) << "%\t" ;
+
+		fileSummary <<  toprintVec[i].second.wrong << "\t"
+			    << 100.0*double(toprintVec[i].second.wrong)/double(totalForRQ) << "%\n" ;
+		
+		if(toprintVec[i].first != "unknown" )
+		    totalAssignRG+=toprintVec[i].second.assigned;
+	    }
+
+	    fileSummary<<dashes<<endl;
+	    fileSummary<<"ASSIGNED:\t"<< totalAssignRG<<"\t"<<100.0*double(totalAssignRG)/double(totalRG)<<"%"<<endl;
+	    fileSummary<<"PROBLEMS:\t"<< (totalRG-totalAssignRG)<<"\t"<<100.0*double(totalRG-totalAssignRG)/double(totalRG)<<"%"<<endl;
+
+	    fileSummary<<"TOTAL:\t"<<totalRG<<"\t100.0%"<<endl;
+	}else{
+	    cerr << "Unable to print to file "<<filenameSummary<<endl;
+	}
+	fileSummary.close();
+    }
+
+
+
+
+    //Print over-represented sequences in conflict,unknown,wrong
+    if(printError){
+	vector< pair<string,int> > conflictToPrint( conflictSeq.begin(), conflictSeq.end() ) ;
+	vector< pair<string,int> > unknownToPrint(  unknownSeq.begin(),  unknownSeq.end() ) ;
+	vector< pair<string,int> > wrongToPrint(    wrongSeq.begin(),    wrongSeq.end() ) ;
+     	
+	sort (conflictToPrint.begin(),   conflictToPrint.end(),   compareNameRG() ); 
+	sort (unknownToPrint.begin(),    unknownToPrint.end(),    compareNameRG() ); 
+	sort (wrongToPrint.begin(),      wrongToPrint.end(),      compareNameRG() ); 
+
+	ofstream fileError;
+	fileError.open(filenameError.c_str());
+	if (fileError.is_open())
+	    {
+		fileError<<      dashes<<endl<<"Conflict:"<<endl<<dashes<<endl;
+		printUnfoundToFile(&conflictToPrint,fileError, printErrorJSONabsent);
+
+		fileError<<endl<<dashes<<endl<<"Unknown:" <<endl<<dashes<<endl;
+		printUnfoundToFile(&unknownToPrint,fileError, printErrorJSONabsent);
+
+		fileError<<endl<<dashes<<endl<<"Wrong:"   <<endl<<dashes<<endl;
+		printUnfoundToFile(&wrongToPrint,fileError, printErrorJSONabsent);
+	    }else{
+	    cerr << "Unable to print to file "<<filenameError<<endl;
+	}
+	fileError.close();
+    }
+
     deallocate();
     if(printError){
 	delete trieKnownString;
