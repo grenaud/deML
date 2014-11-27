@@ -428,7 +428,8 @@ rgAssignment assignReadGroup(string &index1,
 			     string &index2q, 
 			     double rgScoreCutoff,
 			     double fracConflict,
-			     int mismatchesTrie){
+			     int mismatchesTrie,
+			     int qualOffset){
     //BEGIN DEBUG
     // cout<<"DEBUG"<<endl;
     // vector< int > * test1=new vector<int>();
@@ -451,7 +452,6 @@ rgAssignment assignReadGroup(string &index1,
     //END DEBUG
 
     rgAssignment toReturn;
-    int qualOffset=33;
 
     vector<int> quals1;
     vector<int> quals2;
