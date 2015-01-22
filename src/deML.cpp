@@ -1176,21 +1176,40 @@ int main (int argc, char *argv[]) {
 		firstLine=false;
 	    }else{
 		vector<string> tempf = splitWS(line);
-		if(isStringNatNumber(tempf[1]) || 
-		   isStringNatNumber("t"+tempf[1])){ //for truseq
-		    fileContainsSeq=false;
-		    if(tempf.size() == 2){
-			fileContainsSeqDouble=false;
-		    }else{
-			if(tempf.size() == 3){
-			    fileContainsSeqDouble=true;
-			}else{
-			    cerr << "Error: line "<<line<<" does not have 2 or 3 fields"<<endl;
-			    exit(1);
+
+		if(tempf.size() == 2){ //contains 2 fields, single index
+		    fileContainsSeqDouble=false;
+
+		    if(isStringNatNumber(    tempf[0]) || 
+		       isStringNatNumber("t"+tempf[0])){ //for truseq
+			fileContainsSeq=false;
+		    }
+
+		}else{
+		    if(tempf.size() == 3){ //contains 3 fields, double index
+			fileContainsSeqDouble=true;
+
+			if(isStringNatNumber(    tempf[0]) || 
+			   isStringNatNumber("t"+tempf[0])){ //for truseq
+			    fileContainsSeq=false;
+
+			    if( isStringNatNumber(    tempf[1]) || 
+			        isStringNatNumber("t"+tempf[1]) ){ //for truseq
+				//fine
+			    }else{
+				cerr << "Error: line "<<line<<" cannot have a mixture of index sequence and index numbers"<<endl;
+				exit(1);				
+			    }
+
 			}
 
+		    }else{
+			cerr << "Error: line "<<line<<" does not have 2 or 3 fields"<<endl;
+			exit(1);
 		    }
+
 		}
+
 	    }
 	}
 	myIndexFile.close();
