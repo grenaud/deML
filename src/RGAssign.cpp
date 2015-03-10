@@ -1,7 +1,7 @@
 #include "RGAssign.h"
 // vim:ts=8
 
-// #define DEBUG
+//#define DEBUG
 // #define DEBUG2
 //#define DEBUG3
 // #define DEBUGMISPAIR
@@ -397,7 +397,7 @@ inline double computeLike(const string & indexRef,const string & indexRead,const
 
 	}
 
-#ifdef DEBUG
+#ifdef DEBUG2
 	cerr<<"i="<<i<<"\t"<<indexRef[i]<<"\t"<<indexRead[i]<<"\t"<<toReturn<<endl;
 #endif
 
@@ -564,22 +564,25 @@ rgAssignment assignReadGroup(string &index1,
     sort (sortedLikelihoodAll.begin(), sortedLikelihoodAll.end(), comparePair()); 
 
 #ifdef DEBUG
-    cerr<<endl;
-    cerr<<"first:"<<endl;
+    cout<<"------"<<endl;
+    cout<<"first:"<<endl;
     for(unsigned int j=0;j<sortedLikelihood1.size();j++){
-    	cerr<< values.names[ sortedLikelihood1[j].first ]<<"\t"<< sortedLikelihood1[j].second<<endl;
+    	cout<< values.names[ sortedLikelihood1[j].first ]<<"\t"<< sortedLikelihood1[j].second<<endl;
     }
-    cerr<<"second:"<<endl;
+    cout<<"second:"<<endl;
     for(unsigned int j=0;j<sortedLikelihood2.size();j++){
-    	cerr<< values.names[ sortedLikelihood2[j].first ]<<"\t"<< sortedLikelihood2[j].second<<endl;
+    	cout<< values.names[ sortedLikelihood2[j].first ]<<"\t"<< sortedLikelihood2[j].second<<endl;
     }
-    cerr<<"all:"<<endl;
+    cout<<"all:"<<endl;
     for(unsigned int j=0;j<sortedLikelihoodAll.size();j++){
-    	cerr<< values.names[ sortedLikelihoodAll[j].first ]<<"\t"<< sortedLikelihoodAll[j].second<<"\t"<<pow(10.0,sortedLikelihoodAll[j].second)<<endl;
+    	cout<< values.names[ sortedLikelihoodAll[j].first ]<<"\t"<< sortedLikelihoodAll[j].second<<"\t"<<pow(10.0,sortedLikelihoodAll[j].second)<<endl;
     }
-    cerr<<endl;
+    cout<<endl;
     //exit(1);
 #endif
+
+
+
 
     // DETECT WRONGS
     // Look for a wrong index.  Suppose the top indices do not match up,
@@ -593,7 +596,78 @@ rgAssignment assignReadGroup(string &index1,
 
     if( (sortedLikelihood1.size()>1) && 
 	(sortedLikelihood2.size()>1)   ){
+
+
+	    //BEGIN putting the more likely read group on top
+	    int     indexP7ForTop  = -1;
+	    double  indexP7ForTopl = -1.0;
+	     for(unsigned int j=0;j<sortedLikelihood1.size();j++){
+		if(sortedLikelihood1[j].first == sortedLikelihoodAll[0].first){
+		    indexP7ForTop  = int(j);
+		    indexP7ForTopl = sortedLikelihood1[j].second;
+		    break;
+		}
+	    }
+
+	    int     indexP5ForTop  = -1;
+	    double  indexP5ForTopl = -1.0;
+	     for(unsigned int j=0;j<sortedLikelihood2.size();j++){
+		if(sortedLikelihood2[j].first == sortedLikelihoodAll[0].first){
+		    indexP5ForTop  = int(j);
+		    indexP5ForTopl = sortedLikelihood2[j].second;
+		    break;
+		}
+	    }
+	     
+	    if(indexP7ForTop == -1 ||
+	       indexP5ForTop == -1 ){
+		cerr<<"Internal error, unable to trace back the likelihood for one of the index pairs"<<endl;
+		exit(1);
+	    }
+
+	    if(indexP7ForTop != 0){//not first one
+		if(  abs(sortedLikelihood1[0].second-indexP7ForTopl)<0.001 ){ //but just as likely as the first one for practical purposes
+		    pair<int,double> temp             = sortedLikelihood1[0];
+		    sortedLikelihood1[0]              = sortedLikelihood1[indexP7ForTop];
+		    sortedLikelihood1[indexP7ForTop]  = temp;
+		}
+	    }
+
+	    if(indexP5ForTop != 0){//not first one
+		if(  abs(sortedLikelihood2[0].second-indexP5ForTopl)<0.001 ){ //but just as likely as the first one for practical purposes
+		    pair<int,double> temp             = sortedLikelihood2[0];
+		    sortedLikelihood2[0]              = sortedLikelihood2[indexP5ForTop];
+		    sortedLikelihood2[indexP5ForTop]  = temp;
+		}
+	    }
+	    //END putting the more likely read group on top
+
+
+
+#ifdef DEBUGMISPAIR
+	    cout<<"------1\t"<<indexP7ForTop<<"\t"<<indexP5ForTop<<"\t"<<indexP7ForTopl<<"\t"<<indexP5ForTopl<<endl;
+    cout<<"first:"<<endl;
+    for(unsigned int j=0;j<sortedLikelihood1.size();j++){
+    	cout<< values.names[ sortedLikelihood1[j].first ]<<"\t"<< sortedLikelihood1[j].second<<endl;
+    }
+    cout<<"second:"<<endl;
+    for(unsigned int j=0;j<sortedLikelihood2.size();j++){
+    	cout<< values.names[ sortedLikelihood2[j].first ]<<"\t"<< sortedLikelihood2[j].second<<endl;
+    }
+    cout<<"all:"<<endl;
+    for(unsigned int j=0;j<sortedLikelihoodAll.size();j++){
+    	cout<< values.names[ sortedLikelihoodAll[j].first ]<<"\t"<< sortedLikelihoodAll[j].second<<"\t"<<pow(10.0,sortedLikelihoodAll[j].second)<<endl;
+    }
+    cout<<endl;
+    //exit(1);
+#endif
+
+
         if(sortedLikelihood1[0].first != sortedLikelihood2[0].first) { // mismatch, we found the wrong pair
+
+
+
+
            
 	    //find likelihood of p5 (in sortedLikelihood2)  for p7 top hit (sortedLikelihood1[0].first)
 	    int  indexP5LikeForP7Top=-1;
@@ -612,7 +686,11 @@ rgAssignment assignReadGroup(string &index1,
 		    break;
 		}
 	    }
+	    
 
+
+
+	    //
 	    if(indexP7LikeForP5Top == -1 ||
 	       indexP5LikeForP7Top == -1 ){
 		cerr<<"Internal error, unable to trace back the likelihood for one of the index pairs"<<endl;
@@ -629,7 +707,7 @@ rgAssignment assignReadGroup(string &index1,
 	    
 
 #ifdef DEBUGMISPAIR
-	    cout<<"conf\t"<<toReturn.topWrongToTopCorrect<<"\t"<<-10*toReturn.topWrongToTopCorrect<<endl;
+	    cout<<"conf\t"<<toReturn.topWrongToTopCorrect<<"\t"<<-10*toReturn.topWrongToTopCorrect<<"\t"<<indexP5LikeForP7Top<<"\t"<<indexP7LikeForP5Top<<endl;
 #endif
         }else { //stem from the same sample
             // we compare one correct pair to two potentially wrong
