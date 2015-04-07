@@ -139,7 +139,7 @@ static void getIndices( const BamAlignment &al,string & index1,string & index1Q,
 }
 
 
-void updateRecord( BamAlignment &al, const rgAssignment &rg )
+void updateRecord( BamAlignment &al, const rgAssignment &rg , bool failBAM)
 {
     // get old ZQ field, remove "ICW"
     string zq = get_string_field(al, "ZQ");
@@ -197,12 +197,15 @@ void updateRecord( BamAlignment &al, const rgAssignment &rg )
 
     }
 
-    // store new ZQ field and set FailedQC flag if it isn't empty
-    al.SetIsFailedQC( !zq.empty() ) ;
-    if( zq.empty() ) 
-	al.RemoveTag("ZQ") ;
-    else 
-	al.EditTag( "ZQ", "Z", zq ) ;
+    // store new ZQ field and set FailedQC flag if it isn't empty if failBAM
+    if(failBAM){
+	al.SetIsFailedQC( !zq.empty() ) ;
+    
+	if( zq.empty() ) 
+	    al.RemoveTag("ZQ") ;
+	else 
+	    al.EditTag( "ZQ", "Z", zq ) ;
+    }
 }
 
 inline bool containsNoNs(const string & sN){
@@ -487,7 +490,7 @@ void check_thresholds( rgAssignment &rg ) {
     rg.wrong    =  (   10.0 * rg.topWrongToTopCorrect) > wrongness ;
 }
 
-void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq)
+void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq,bool failBAM)
 {
     string index1;
     string index1Q;
@@ -499,7 +502,7 @@ void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError
     rgAssignment rgReturn=assignReadGroup(index1,index1Q,index2,index2Q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
     check_thresholds( rgReturn ) ;
 
-    updateRecord(al,rgReturn);
+    updateRecord(al,rgReturn,failBAM);
     writer.SaveAlignment(al);
 
     //record unresolved indices
@@ -518,7 +521,7 @@ void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError
 
 }
 
-void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writer, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq)
+void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writer, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq,bool failBAM)
 {
     string index1;
     string index1Q;
@@ -543,8 +546,8 @@ void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writ
     rgAssignment rgReturn = assignReadGroup(index1,index1Q,index2,index2Q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
     check_thresholds( rgReturn ) ;
 
-    updateRecord(al, rgReturn);
-    updateRecord(al2,rgReturn);
+    updateRecord(al, rgReturn,failBAM);
+    updateRecord(al2,rgReturn,failBAM);
     writer.SaveAlignment(al);
     writer.SaveAlignment(al2);
 
@@ -880,6 +883,7 @@ int main (int argc, char *argv[]) {
     bool ratioValuesFlag = false;
     bool rgqualFlag      = false;
     bool shiftByOne      = false;
+    bool failBAM         = true;
 
     bool useFastq=false;
     string forwardfq;
@@ -925,6 +929,7 @@ int main (int argc, char *argv[]) {
 			      "\t\t"+"-e"+","+"--error"  +"\t[error file]"+"\t\t"+"Summarize the indices that were not assigned to a RG"+"\n"+
 			      "\t\t"+""+""+"--rgval"  +"\t[file]"+"\t\t\t\t"+"Write the rg qualities as a binary file"+"\n"+
 			      "\t\t"+""+""+"--ratio"   +"\t\t[file]"+"\t\t\t"+"Write the likelihood ratios as a binary file"+"\n"
+			      "\t\t"+""+""+"--nofail"   +"\t\t\t"+"\t"+"Do not set the QC fail in the output BAM file"+"\n"
 
 			      );
 			      
@@ -942,6 +947,11 @@ int main (int argc, char *argv[]) {
     int lastIndexArgc = argc-1;
     for(int i=1;i<(lastIndexArgc);i++){ //all but the last
 	
+	if(string(argv[i]) == "--nofail"  ){
+            failBAM=false;
+            continue;
+        }
+
 	if(strcmp(argv[i],"-f") == 0 ){
 	    forwardfq = string(argv[i+1]);
 	    useFastq=true;
@@ -1384,18 +1394,18 @@ int main (int argc, char *argv[]) {
 	    while(1) {
 		if( !reader.GetNextAlignment(al2) ) {
 		    // EOF, process the one leftover record
-		    processSingleEndReads(al,writer,printError,unknownSeq,wrongSeq,conflictSeq);
+		    processSingleEndReads(al,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
 		    break; 
 		}
 		// If it's paired, both should have the same index, and we
 		// save some work.  Since the reads are probably not
 		// ordered, check the names first
 		if( al.IsPaired() && al.Name == al2.Name ) {
-		    processPairedEndReads(al,al2,writer,printError,unknownSeq,wrongSeq,conflictSeq);
+		    processPairedEndReads(al,al2,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
 		    break ;
 		} else {
 		    // no match, treat one(!) separately
-		    processSingleEndReads(al ,writer,printError,unknownSeq,wrongSeq,conflictSeq);
+		    processSingleEndReads(al ,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
 		    swap(al,al2) ;
 		}
 	    }
