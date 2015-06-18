@@ -615,11 +615,11 @@ void processFastq(string           forwardfq,
 	string index2q;
 
 	vector<string> deff=allTokens( *(ffo->getID()), ' '  );
-	string deffs=deff[0];
+	string deffs       =deff[0];
 	//cerr<<deffs<<endl;
 
 	if(!fqpi1->hasData()){
-	    cerr << "ERROR: Discrepency between fastq files at record with first index " <<  *(ffo->getID()) <<endl;
+	    cerr << "ERROR: Discrepancy between fastq files at record with first index " <<  *(ffo->getID()) <<endl;
 	    exit(1);
 	}
 	
@@ -634,8 +634,11 @@ void processFastq(string           forwardfq,
 	// }
 
 
-	if( (deffs != *(i1fo->getID()) ) ){
-	    cerr << "ERROR: Discrepency between fastq files, different names with first index " <<deffs <<" and "<< *(i1fo->getID()) <<endl;
+	vector<string> defi1 = allTokens( *(i1fo->getID()), ' '  );
+	string defi1s        = defi1[0];
+
+	if( (deffs != defi1s ) ){
+	    cerr << "ERROR: Discrepancy between fastq files, different names with first index " <<deffs <<" and "<< defi1s <<endl;
 	    exit(1);
 	}
 	
@@ -645,14 +648,17 @@ void processFastq(string           forwardfq,
 
 	if(hasId2Bool){
 	    if(!fqpi2->hasData()){
-		cerr << "ERROR: Discrepency between fastq files at record with second index " <<  *(ffo->getID()) <<endl;
+		cerr << "ERROR: Discrepancy between fastq files at record with second index " <<  *(ffo->getID()) <<endl;
 		exit(1);
 	    }
 	    
 	    i2fo=fqpi2->getData();
-	    
-	    if( (deffs != *(i2fo->getID()) ) ){
-		cerr << "ERROR: Discrepency between fastq files, different names with second index " <<deffs <<" and "<< *(i1fo->getID()) <<endl;
+	    vector<string> defi2 = allTokens( *(i2fo->getID()), ' '  );
+	    string defi2s        = defi2[0];
+
+
+	    if( (deffs != defi2s ) ){
+		cerr << "ERROR: Discrepancy between fastq files, different names with second index " <<deffs <<" and "<< defi2s <<endl;
 		exit(1);
 	    }
 
@@ -669,7 +675,7 @@ void processFastq(string           forwardfq,
 	    rfo=fqpr->getData();
 
 	    vector<string> defr=allTokens( *(rfo->getID()), ' '  );
-	    string defrs=defr[0];
+	    string defrs       =defr[0];
 	    
 
 	    if(strEndsWith(defrs,  "/2")){
