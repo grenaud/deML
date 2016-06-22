@@ -79,29 +79,34 @@ b. fastq file where the forward reads are in one file, reverse in another file.
 
 You can either specify the actual sequences used for multiplexing:
 
-  #Index1	Index2	Name
-  AATTCAA	CATCCGG	RG1
-  CGCGCAG	TCATGGT	RG2
-  AAGGTCT	AGAACCG	RG3
-  ACTGGAC	TGGAATA	RG4
-  AGCAGGT	CAGGAGG	RG5
-  GTACCGG	AATACCT	RG6
-  GGTCAAG	CGAATGC	RG7
-  AATGATG	TTCGCAA	RG8
-  AGTCAGA	AATTCAA	RG9
+```
+#Index1	Index2	Name
+AATTCAA	CATCCGG	RG1
+CGCGCAG	TCATGGT	RG2
+AAGGTCT	AGAACCG	RG3
+ACTGGAC	TGGAATA	RG4
+AGCAGGT	CAGGAGG	RG5
+GTACCGG	AATACCT	RG6
+GGTCAAG	CGAATGC	RG7
+AATGATG	TTCGCAA	RG8
+AGTCAGA	AATTCAA	RG9
+```
 
 or you can also specify the raw indices:
 
-  #Index1	Index2	Name
-  341	33	RG1
-  342	34	RG2
-  343	35	RG3
-  344	36	RG4
-  345	37	RG5
-  346	38	RG6
-  347	39	RG7
-  348	40	RG8
-  349	41	RG9
+```
+#Index1	Index2	Name
+341	33	RG1
+342	34	RG2
+343	35	RG3
+344	36	RG4
+345	37	RG5
+346	38	RG6
+347	39	RG7
+348	40	RG8
+349	41	RG9
+```
+
 
 However, these numbers must match those in the webform/config.json file. You can alwys modify that file if you use different indices.
 
