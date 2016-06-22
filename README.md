@@ -154,3 +154,43 @@ Z_2  = 10* log_10 |   ------------------------------ |
 
 An approximation is made to speed up computations.  The higher the Z_2 score, the higher the odds ratio of mispairing and the lower the confidence. This score is not reported for runs with single indices and where the log ratio is less than 0 thus making the mispairing scenario unlikely.  
 
+
+Summary file:
+----------------------
+
+
+If you select the -s or --summary option to obtain a tally, here are the columns and their meaning:
+
+
+
+|   Field      |                                      Meaning                                                   |
+| -------------|------------------------------------------------------------------------------------------------|
+| RG           | Name of read group or sample                                                                   |
+| total        | Number of reads assigned to this sample including those failing quality control                |
+| total%       | Percentage of reads in "total" as a fraction of the all the reads                              |
+| assigned     | Number of reads assigned to this sample that pass quality control                              |
+| assigned%    | Percentage of reads in "assigned" as a fraction of the "total"                                 |
+| unknown      | Reads that were assigned to this sample but failed Z_0 (prob. of correctness for this sample)  |
+| unknown%     | Percentage of reads in "unknown" as a fraction of the "total"                                  |
+| conflict     | Reads that were assigned to this sample but failed Z_1 (prob. of misassignment)                |
+| conflict%    | Percentage of reads in "conflict" as a fraction of the "total"                                 |
+| wrong        | Reads that were assigned to this sample but failed Z_2 (prob. of mispairing, double index only)|
+| wrong%       | Percentage of reads in "wrong" as a fraction of the "total"                                    |
+
+Remember that the program will ALWAYS assign a read to a read group if it finds one in the list for the set number of mismatches.  Whether or not the assignment will be allowed to pass quality control will determine if they will make it to the final set.
+If you still do not understand assigned, unknown, conflict and wrong, read the following section.
+
+What does assigned, unknown, conflict and wrong really mean?
+----------------------
+
+Here is an "Explain like I'm Five" for every category:
+
+* "unknown": It's more likely that you belong to that sample than any other but that probability is low, so you fail ex: P[sample1] = 0.2 P[sample2] = 0.02 P[sample3] = 0.01  and 0.2 is considered low
+
+* "conflict": It's more likely that you belong to that sample than any other but the probability that you belong to another sample is almost equally likely, so you fail ex: P[sample1] = 0.2 P[sample2] = 0.19 P[sample3] = 0.01 
+
+* "wrong": It's more likely that you belong to that sample than any other but it seems your indices (in the case of double indexing) are mispaired. ex: ex: P[sample1|index1] = 0.1 P[sample1|index2] = 0.01 P[sample2|index1] = 0.01 P[sample2|index2] = 0.1 
+
+* "assigned": Congrats! You have none of the problems listed above ex: P[sample1] = 0.8 P[sample2] = 0.02 P[sample3] = 0.01 
+
+
