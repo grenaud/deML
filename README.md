@@ -131,7 +131,9 @@ deML works by computing the likelihood of stemming from potential samples and as
 
 Z_0  The likelihood for the top read group on a PHRED scale. Considering the sequence of this read group as the template to sequence and using the principle of independence between bases, this likelihood is computed as:
 
-      Z_0= -10 * log_10{ PROD_{1...length indices} P(base read i|base template i)  }
+```
+Z_0= -10 * log_10{ PROD_{1...length indices} P(base read i|base template i)  }
+```
 
 The P(base read i|base template i) is given as (1-e_i) if both bases match or e_i otherwise where e_i is the predicted error rate for base i.
 
@@ -141,10 +143,11 @@ Since it is on a likelihood of assignment on a PHRED scale, the lower the Z_0 sc
 
 Z_1 Is the likelihood of misassignment on a PHRED scale. Let M be the number of potential read groups are present and let t be the read group with the highestZ_0. If Z_0_i is the Z_0 score for sample i, the Z_1 score is computed by:
 
-
-                      |    SUM_i={1..M} (10^(Z_0_i)) - 10^(Z_0_t)   |
-  Z_1= -10*log_10     |    --------------------------------------   |
-                      |          SUM_i={1..M} (10^(Z_0_i))          |
+```
+                    |    SUM_i={1..M} (10^(Z_0_i)) - 10^(Z_0_t)   |
+Z_1= -10*log_10     |    --------------------------------------   |
+                    |          SUM_i={1..M} (10^(Z_0_i))          |
+```
 
 
 The higher the Z_1 score, the lower the probability of misassignment and the higher the confidence. This score is not reported if only a single read group is found.
@@ -153,11 +156,12 @@ The higher the Z_1 score, the lower the probability of misassignment and the hig
 
 Z_2 Is a log odds ratio of mispairing on a logarithmic scale. It is only computed when two indices are used (P7 and P5). It is computed as:
 
+```
+                  |   SUM_{i!=j} ( P7_i) (P5_j)  )   |
+Z_2  = 10* log_10 |   ------------------------------ |
+                  |   SUM_{i==j} ( P7_i) (P5_j)  )   |
 
-                    |   SUM_{i!=j} ( P7_i) (P5_j)  )   |
-  Z_2  = 10* log_10 |   ------------------------------ |
-                    |   SUM_{i==j} ( P7_i) (P5_j)  )   |
-
+```
 
 An approximation is made to speed up computations.  The higher the Z_2 score, the higher the odds ratio of mispairing and the lower the confidence. This score is not reported for runs with single indices and where the log ratio is less than 0 thus making the mispairing scenario unlikely.  
 
