@@ -1,5 +1,5 @@
 ==========================================================
- deML: Maximum likelihood demultiplexing for NGS data
+deML: Maximum likelihood demultiplexing for NGS data
 ==========================================================
 
 QUESTIONS :
