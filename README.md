@@ -200,7 +200,7 @@ Here is an "Explain like I'm Five" for every category:
 
 * "conflict": It's more likely that you belong to that sample than any other but the probability that you belong to another sample is almost equally likely, so you fail ex: P[sample1] = 0.2 P[sample2] = 0.19 P[sample3] = 0.01 
 
-* "wrong": It's more likely that you belong to that sample than any other but it seems your indices (in the case of double indexing) are mispaired. ex: ex: P[sample1|index1] = 0.1 P[sample1|index2] = 0.01 P[sample2|index1] = 0.01 P[sample2|index2] = 0.1 
+* "wrong": It's more likely that you belong to that sample than any other but it seems your indices (in the case of double indexing) are mispaired so you fail. ex: ex: P[sample1|index1] = 0.1 P[sample1|index2] = 0.01 P[sample2|index1] = 0.01 P[sample2|index2] = 0.1 
 
 * "assigned": Congrats! You have none of the problems listed above ex: P[sample1] = 0.8 P[sample2] = 0.02 P[sample3] = 0.01 
 
