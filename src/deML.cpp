@@ -922,6 +922,9 @@ int main (int argc, char *argv[]) {
 			      "\t\t"+"-i"+","+"--index"+"\t[index]"+"\t\t\t"+"File describing index sequences used"+"\n"+
 			      "\t\t"+"-o"+","+"--outfile"+"\t[outfile]"+"\t\t"+"Specify output file"+"\n\n"+
 
+			      "\t"+"BAM input options:"+"\n"+
+			      "\t\t"+"--bamtags"+"\t[Idx1Seq],[Idx1Qual],[Idx2Seq],[Idx2Qual]"+"\t"+"BAM Tags containing barcodes\n"+
+
 			      "\t"+"Fastq input/output (optional):"+"\n"+
 			      "\t\t"+"You can specify fastq as input/output, in which case the -o option will be"+"\n"+
 			      "\t\t"+"treated as an output prefix"+"\n"+
@@ -986,6 +989,26 @@ int main (int argc, char *argv[]) {
 	    reversefq = string(argv[i+1]);
 	    useFastq=true;
 	    lastIndexArgc = argc;
+	    i++;
+	    continue;
+	}
+
+	if(strcmp(argv[i],"--bamtags") == 0 ){
+	    istringstream iss(argv[i+1]);
+	    string tok;
+	    int p=0;
+	    while(getline(iss, tok, ',')) {
+	        switch (p) {
+	            case 0: tagIndex1Seq = tok; break;
+	            case 1: tagIndex1Qual = tok; break;
+	            case 2: tagIndex2Seq = tok; break;
+	            case 3: tagIndex2Qual = tok; break;
+	            default:
+	                cerr<<"too many commas in "<<argv[i+1]<<endl;
+	                exit(1);
+	        }
+	        ++p;
+	    }
 	    i++;
 	    continue;
 	}
