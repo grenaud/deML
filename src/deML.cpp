@@ -54,6 +54,11 @@ struct tallyForRG{
 
 int qualOffset=33;
 
+static string tagIndex1Seq = "XI";
+static string tagIndex1Qual = "YI";
+static string tagIndex2Seq = "XJ";
+static string tagIndex2Qual = "YJ";
+
 static double rgScoreCutoff  = 80 ;             // two HQ bases can mismatch
 static double fracConflict   = 20 ;             // top shall be 100x more likely
 static double wrongness      = 60 ;             // flag wrong if the wrong pair is a lot more likely
@@ -117,25 +122,36 @@ static string get_string_field( BamAlignment &al, const char* name )
     return string() ;
 }
 
-static void getIndices( const BamAlignment &al,string & index1,string & index1Q,string & index2,string & index2Q){
-    if(!al.GetTag("XI",index1) ){ 	
-	cerr << "Cannot retrieve XI field  "<<al.Name << endl;
-	exit(1); 
+static bool getIndices( const BamAlignment &al,string & index1,string & index1Q,string & index2,string & index2Q,bool suppressErrors=false){
+    if(!al.GetTag(tagIndex1Seq,index1) ){ 	
+        if (!suppressErrors) {
+	    cerr << "Cannot retrieve "<<tagIndex1Seq<<" field  "<<al.Name << endl;
+	    exit(1); 
+        } else
+            return false;
     }
 
-    if(!al.GetTag("YI",index1Q)){ 	
-	cerr << "Cannot retrieve YI field  "<<al.Name << endl;
-	exit(1); 
+    if(!al.GetTag(tagIndex1Qual,index1Q)){ 	
+        if (!suppressErrors) {
+	    cerr << "Cannot retrieve "<<tagIndex1Qual<<" field  "<<al.Name << endl;
+	    exit(1); 
+        } else
+            return false;
     }
 
-    if(!al.GetTag("XJ",index2)) {
+    if(!al.GetTag(tagIndex2Seq,index2)) {
         index2 ="";
         index2Q="";
     }
-    else if(!al.GetTag("YJ",index2Q)) { //we got XJ, double indexed
-	cerr << "Cannot retrieve YJ field  "<<al.Name << endl;
-	exit(1); 
+    else if(!al.GetTag(tagIndex2Qual,index2Q)) { //we got XJ, double indexed
+        if (!suppressErrors) {
+    	    cerr << "Cannot retrieve "<<tagIndex2Qual<<" field  "<<al.Name << endl;
+    	    exit(1); 
+        } else
+            return false;
     }
+    
+    return true;
 }
 
 
@@ -536,12 +552,12 @@ void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writ
     //retrieve indices
     getIndices(al,index1,index1Q,index2,index2Q);
     //check to see if the other indices are the same just for fun
-    getIndices(al2,sindex1,sindex1Q,sindex2,sindex2Q);
+    bool al2HasIndex=getIndices(al2,sindex1,sindex1Q,sindex2,sindex2Q,true);
 
-    if(index1 !=sindex1 ){cerr<<"Seq#1 has a different index 1 than seq #2, exiting "        <<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
-    if(index1Q!=sindex1Q){cerr<<"Seq#1 has a different index 1 quality than seq #2, exiting "<<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
-    if(index2 !=sindex2 ){cerr<<"Seq#1 has a different index 2 than seq #2, exiting "        <<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
-    if(index2Q!=sindex2Q){cerr<<"Seq#1 has a different index 2 quality than seq #2, exiting "<<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
+    if(al2HasIndex && (index1 !=sindex1 )){cerr<<"Seq#1 has a different index 1 than seq #2, exiting "        <<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
+    if(al2HasIndex && (index1Q!=sindex1Q)){cerr<<"Seq#1 has a different index 1 quality than seq #2, exiting "<<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
+    if(al2HasIndex && (index2 !=sindex2 )){cerr<<"Seq#1 has a different index 2 than seq #2, exiting "        <<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
+    if(al2HasIndex && (index2Q!=sindex2Q)){cerr<<"Seq#1 has a different index 2 quality than seq #2, exiting "<<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
 
     rgAssignment rgReturn = assignReadGroup(index1,index1Q,index2,index2Q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
     check_thresholds( rgReturn ) ;
