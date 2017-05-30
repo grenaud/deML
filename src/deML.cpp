@@ -54,9 +54,9 @@ struct tallyForRG{
 
 int qualOffset=33;
 
-static string tagIndex1Seq = "XI";
+static string tagIndex1Seq  = "XI";
 static string tagIndex1Qual = "YI";
-static string tagIndex2Seq = "XJ";
+static string tagIndex2Seq  = "XJ";
 static string tagIndex2Qual = "YJ";
 
 static double rgScoreCutoff  = 80 ;             // two HQ bases can mismatch
@@ -583,6 +583,19 @@ void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writ
 }
 
 
+void checkFD(){
+    int rofd  = returnOpenFileDescriptors();
+    int rofdM = returnOpenFileDescriptorsMax();
+    if(rofd == rofdM){
+	cerr<<"WARNING: deML has detected that you have "<<rofd<<" open file descriptors out of a max. of "<<rofd<<endl;
+	cerr<<"         therefore you have reached the maximum. If the information is correct, certain files might be empty"<<endl;
+	cerr<<"         Either:"<<endl;
+	cerr<<"           1) Use BAM as input/output"<<endl;
+	cerr<<"           2) Check \"ulimit -n\" and put a higher number e.g. \"ulimit -n 1024\""<<endl;
+	cerr<<"              If you already at the limit, increase the system limits"<<endl;
+    }
+
+}
 
 void processFastq(string           forwardfq,
 		  string           reversefq,
@@ -781,27 +794,27 @@ void processFastq(string           forwardfq,
 	    rg2FqWriters[predictedGroup]->pairi1f.open(outpairi1f.c_str(), ios::out);
 
 	    //if(!onereadgroup.single.good()){      cerr<<"Cannot write to file "<<outdirsf<<endl; return 1; }
-	    if(!rg2FqWriters[predictedGroup]->pairr1.good()){          cerr<<"Cannot write to file "<< outpairr1 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-	    if(!rg2FqWriters[predictedGroup]->pairr1f.good()){         cerr<<"Cannot write to file "<< outpairr1f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
+	    if(!rg2FqWriters[predictedGroup]->pairr1.good()){          checkFD(); cerr<<"Cannot write to file "<< outpairr1 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
+	    if(!rg2FqWriters[predictedGroup]->pairr1f.good()){         checkFD(); cerr<<"Cannot write to file "<< outpairr1f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
 	    	    
-	    if(!rg2FqWriters[predictedGroup]->pairi1.good()){          cerr<<"Cannot write to file "<< outpairi1 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-	    if(!rg2FqWriters[predictedGroup]->pairi1f.good()){         cerr<<"Cannot write to file "<< outpairi1f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
+	    if(!rg2FqWriters[predictedGroup]->pairi1.good()){          checkFD(); cerr<<"Cannot write to file "<< outpairi1 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
+	    if(!rg2FqWriters[predictedGroup]->pairi1f.good()){         checkFD(); cerr<<"Cannot write to file "<< outpairi1f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
 
 
 	    if(hasId2Bool){
 		rg2FqWriters[predictedGroup]->pairi2.open( outpairi2.c_str(),  ios::out);
 		rg2FqWriters[predictedGroup]->pairi2f.open(outpairi2f.c_str(), ios::out);
 
-		if(!rg2FqWriters[predictedGroup]->pairi2.good()){      cerr<<"Cannot write to file "<< outpairi2 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-		if(!rg2FqWriters[predictedGroup]->pairi2f.good()){     cerr<<"Cannot write to file "<< outpairi2f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
+		if(!rg2FqWriters[predictedGroup]->pairi2.good()){      checkFD(); cerr<<"Cannot write to file "<< outpairi2 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
+		if(!rg2FqWriters[predictedGroup]->pairi2f.good()){     checkFD(); cerr<<"Cannot write to file "<< outpairi2f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
 	    }
 
 	    if(hasRevBool){
 		rg2FqWriters[predictedGroup]->pairr2.open( outpairr2.c_str(),  ios::out);
 		rg2FqWriters[predictedGroup]->pairr2f.open(outpairr2f.c_str(), ios::out);
 
-		if(!rg2FqWriters[predictedGroup]->pairr2.good()){      cerr<<"Cannot write to file "<<outpairr2 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-		if(!rg2FqWriters[predictedGroup]->pairr2f.good()){     cerr<<"Cannot write to file "<<outpairr2f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }	   
+		if(!rg2FqWriters[predictedGroup]->pairr2.good()){      checkFD(); cerr<<"Cannot write to file "<<outpairr2 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
+		if(!rg2FqWriters[predictedGroup]->pairr2f.good()){     checkFD(); cerr<<"Cannot write to file "<<outpairr2f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }	   
 	    }
 	}//end new rg
 	 
