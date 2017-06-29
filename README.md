@@ -1,4 +1,5 @@
-==========================================================
+
+
 deML: Maximum likelihood demultiplexing for NGS data
 ==========================================================
 
@@ -19,11 +20,11 @@ Downloading:
 
 Make sure you have zlib.h installed. Go to https://github.com/grenaud/deML and either:
 
-1) Download ZIP 
+1. Download ZIP 
 
 or
 
-2) Do a "git clone --recursive https://github.com/grenaud/deML.git"
+2. Do a "git clone --recursive https://github.com/grenaud/deML.git"
 
 
 Installation for unix based systems :
@@ -31,9 +32,9 @@ Installation for unix based systems :
 
 Mac users need to use the terminal to install and run deML.
 
-1) make sure you have "cmake" and "git" installed, check for it by typing " git --version" and "cmake --version"
+1. make sure you have "cmake" and "git" installed, check for it by typing " git --version" and "cmake --version"
 
-2) Build the submodules and main code by typing :
+2. Build the submodules and main code by typing :
     make
 
 
@@ -203,5 +204,28 @@ Here is an "Explain like I'm Five" for every category:
 * "wrong": It's more likely that you belong to that sample than any other but it seems your indices (in the case of double indexing) are mispaired so you fail. ex: ex: P[sample1|index1] = 0.1 P[sample1|index2] = 0.01 P[sample2|index1] = 0.01 P[sample2|index2] = 0.1 
 
 * "assigned": Congrats! You have none of the problems listed above ex: P[sample1] = 0.8 P[sample2] = 0.02 P[sample3] = 0.01 
+
+
+I get "Cannot write to file outputFolder/prefixRGXYZ.fq.gz", what is wrong?
+----------------------
+
+There are two possibilities:
+1. either you do not have write permission in the directory in which you're trying to write
+2. you have reached the limit of open file descriptors for their current system.
+
+determine which of the two is the most likely, tried to create a file called exactly outputFolder/prefixRGXYZ.fq.gz using:
+
+    touch outputFolder/prefixRGXYZ.fq.gz
+
+if this returns an error then you likely do not have the permission to write to this file. Otherwise it is potentially the latter. Run:
+
+    ulimit -n
+
+and most system this command to return 1024. To increase the number of file descriptors use the following command:
+
+    ulimit -n 1024
+
+depending on the system this may require administrator privileges.  However, increasing the limit beyond that requires someone with administrator privileges.
+
 
 
