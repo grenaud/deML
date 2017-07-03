@@ -24,7 +24,7 @@ Make sure you have zlib.h installed. Go to https://github.com/grenaud/deML and e
 
 or
 
-2. Do a "git clone --recursive https://github.com/grenaud/deML.git"
+2. Do a "git clone  https://github.com/grenaud/deML.git"
 
 
 Installation for unix based systems :
