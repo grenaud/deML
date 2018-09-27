@@ -951,7 +951,7 @@ int main (int argc, char *argv[]) {
 			      "\t\t"+"--phred64"  +"\t"+"\t\t\t"+""+"Use PHRED 64 as the offset for QC scores (default : PHRED33)"+"\n"+
 
 			      "\t\t"+"--rgqual"  +"\t[quality]"+"\t\t"+""+"Worst quality before flagging as unknown ["+stringify(rgScoreCutoff)+"]\n"+
-			      "\t\t"+"--fracconf"+"\t[quality]"+"\t\t"+""+"Maximum quality difference considered a conflict ["+stringify(fracConflict)+"] \n"+
+			      "\t\t"+"--fracconf"+"\t[quality]"+"\t\t"+""+"Maximum quality difference before being considered a conflict ["+stringify(fracConflict)+"] \n"+
 			      "\t\t"+"--wrongness"+"\t[quality]"+"\t\t"+""+"Mininum quality difference to flag as wrongly paired ["+stringify(wrongness)+"] \n"+
 			      "\t\t"+"--mm"+"\t\t[mismatches]"+"\t\t"+""+"Maximum # of tolerated mismatches ["+stringify(mismatchesTrie)+"] \n"+
 
