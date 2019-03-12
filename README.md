@@ -229,3 +229,10 @@ depending on the system this may require administrator privileges.  However, inc
 
 
 
+
+I get "ACGTACGT from sample1 causes a conflict with sample2" why?
+----------------------
+
+These are just warnings, not necessarily errors if you have double indexing. If you have single indices, this means the algorithm cannot distinguish between "sample1" and "sample2" and all reads assigned to those will fail internal QC. 
+
+For double-indexing, it merely indicates that in your index list, you have some repeated indices for either the first or second index. Of course, having unique pairs is sufficient to demultiplex. However, having repetitive indices for one index defeats the purpose of using double-indexing as you rely on a single index to demultiplex. Again, this might be unavoidable if your sample list is greater than your list of unique indices.
