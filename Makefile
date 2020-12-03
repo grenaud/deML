@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 all: 	src/deML
 
-src/deML: SimpleJSON/obj/JSONValue.o libgab/utils.o bamtools/build/src/api/libbamtools.a
+src/deML: SimpleJSON/obj/JSONValue.o libgab/libgab.a bamtools/build/src/api/libbamtools.a
 	make -C src
 
 SimpleJSON/obj/JSONValue.h:
@@ -15,12 +15,12 @@ SimpleJSON/obj/JSONValue.h:
 SimpleJSON/obj/JSONValue.o: SimpleJSON/obj/JSONValue.h
 	make -C SimpleJSON
 
-libgab/utils.h:
+libgab/libgab.h:
 	rm -rf libgab/
 	git clone --recursive https://github.com/grenaud/libgab.git
 
 
-libgab/utils.o: bamtools/build/src/api/libbamtools.a  libgab/utils.h
+libgab/libgab.a: bamtools/build/src/api/libbamtools.a  libgab/libgab.h
 	make -C libgab
 
 bamtools/src/api/BamAlignment.h:

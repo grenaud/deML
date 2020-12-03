@@ -18,7 +18,7 @@
 #include "FastQParser.h"
 
 #include "JSON.h"
-#include "utils.h"
+#include "libgab.h"
 
 using namespace std;
 using namespace BamTools;
