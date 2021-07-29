@@ -337,7 +337,7 @@ map<string,string>  readIndexFile(string filename,int mismatchesTrie,bool _shift
 	    }
 
 	    if(toPrint.length() > 0){
-		cerr<<values.indices1[i]<<" from "<<values.names[i]<<" causes a conflict with "<<toPrint<<endl;
+		cerr<<values.indices2[i]<<" from "<<values.names[i]<<" causes a conflict with "<<toPrint<<endl;
 	    }
 	}
 
