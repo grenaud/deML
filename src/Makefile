@@ -18,7 +18,8 @@ all:    deML
 deML: deML.o PrefixTree.o RGAssign.o ${LIBGAB}/PutProgramInHeader.o ${SIMPLEJSON}/obj/JSON.o ${SIMPLEJSON}/obj/JSONValue.o ${LIBGAB}/FastQObj.o  ${LIBGAB}/FastQParser.o 
 	${CXX} $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-
+static: deML.o PrefixTree.o RGAssign.o ${LIBGAB}/PutProgramInHeader.o ${SIMPLEJSON}/obj/JSON.o ${SIMPLEJSON}/obj/JSONValue.o ${LIBGAB}/FastQObj.o  ${LIBGAB}/FastQParser.o 
+	${CXX} -static $(LDFLAGS) -o deML $^ $(LDLIBS)
 
 
 
