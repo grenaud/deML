@@ -7,6 +7,15 @@
 #include <map>
 #include <gzstream.h>
 
+#include <pthread.h>
+#include <queue>
+#include <vector>
+#include <thread>
+#include <algorithm>
+#include <chrono>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <atomic>
 
 #include <api/SamHeader.h>
 #include <api/BamMultiReader.h>
@@ -53,6 +62,7 @@ struct tallyForRG{
 };
 
 int qualOffset=33;
+int userSetThreads = 0; 
 
 static string tagIndex1Seq  = "XI";
 static string tagIndex1Qual = "YI";
@@ -94,6 +104,48 @@ struct compareNameTally {
     }
 };
 
+// This structure represents a unit of work (either a single read or a pair of reads) 
+// that a thread can process. The queue will hold these work items, and we use a mutex
+// and condition variable to ensure thread-safe access to the queue.
+
+struct ThreadData {
+    BamWriter* writer;
+    bool printError;
+    map<string,int>* unknownSeq;
+    map<string,int>* wrongSeq;
+    map<string,int>* conflictSeq;
+    bool failBAM;
+};
+
+// Add these with other global variables/declarations
+struct WorkItem {
+    BamAlignment al;
+    BamAlignment al2;
+    bool isPaired;
+    ThreadData* data;
+    int rank;
+};
+
+struct ProcessedWorkItem {
+    WorkItem item;
+    bool written;
+};
+
+struct CompareWorkItemRank {
+    bool operator()(const ProcessedWorkItem& a, const ProcessedWorkItem& b) {
+        return a.item.rank > b.item.rank;  // Priority queue is min heap
+    }
+};
+
+std::priority_queue<ProcessedWorkItem, vector<ProcessedWorkItem>, CompareWorkItemRank> outputQueue;
+pthread_mutex_t outputQueueMutex = PTHREAD_MUTEX_INITIALIZER;
+int nextRankToWrite = 0;
+
+std::queue<WorkItem> workQueue;
+pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t queueCond = PTHREAD_COND_INITIALIZER;
+bool allDataRead = false;
+std::atomic<int> itemsProcessed(0);
 
 static string get_string_field( BamAlignment &al, const char* name ) 
 {
@@ -892,7 +944,111 @@ void processFastq(string           forwardfq,
 
 }
 
+// This function represents the work each thread will perform. It continuously retrieves 
+// work items from the queue and processes them using the existing processPairedEndReads 
+// or processSingleEndReads functions.
 
+pthread_mutex_t unknownSeqMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t wrongSeqMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t conflictSeqMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t writerMutex = PTHREAD_MUTEX_INITIALIZER;
+
+void* workerThread(void* arg) {
+    ThreadData* data = static_cast<ThreadData*>(arg);
+    while (true) {
+        WorkItem item;
+        bool hasWork = false;
+
+        pthread_mutex_lock(&queueMutex);
+        while (workQueue.empty() && !allDataRead) {
+            pthread_cond_wait(&queueCond, &queueMutex);
+        }
+        if (!workQueue.empty()) {
+            item = workQueue.front();
+            workQueue.pop();
+            hasWork = true;
+        } else if (allDataRead) {
+            pthread_mutex_unlock(&queueMutex);
+            break;
+        }
+        pthread_mutex_unlock(&queueMutex);
+
+        if (hasWork) {
+            string index1, index1Q, index2, index2Q;
+            getIndices(item.al, index1, index1Q, index2, index2Q);
+
+            rgAssignment rgReturn = assignReadGroup(index1, index1Q, index2, index2Q, 
+                                                  rgScoreCutoff, fracConflict, 
+                                                  mismatchesTrie, qualOffset);
+            check_thresholds(rgReturn);
+
+            // Process alignments
+            updateRecord(item.al, rgReturn, data->failBAM);
+            if (item.isPaired) {
+                updateRecord(item.al2, rgReturn, data->failBAM);
+            }
+
+            // Handle error tracking
+            if (data->printError) {
+                string keyIndex = index2.empty() ? index1 : index1 + "#" + index2;
+                
+                pthread_mutex_lock(&conflictSeqMutex);
+                if (rgReturn.conflict) (*(data->conflictSeq))[keyIndex]++;
+                pthread_mutex_unlock(&conflictSeqMutex);
+                
+                pthread_mutex_lock(&unknownSeqMutex);
+                if (rgReturn.unknown) (*(data->unknownSeq))[keyIndex]++;
+                pthread_mutex_unlock(&unknownSeqMutex);
+                
+                pthread_mutex_lock(&wrongSeqMutex);
+                if (rgReturn.wrong) (*(data->wrongSeq))[keyIndex]++;
+                pthread_mutex_unlock(&wrongSeqMutex);
+            }
+
+            // Add to output queue
+            pthread_mutex_lock(&outputQueueMutex);
+            ProcessedWorkItem processedItem;
+            processedItem.item = item;
+            processedItem.written = false;
+            outputQueue.push(processedItem);
+
+            // Try to write outputs in order
+            while (!outputQueue.empty() && outputQueue.top().item.rank == nextRankToWrite) {
+                ProcessedWorkItem toWrite = outputQueue.top();
+                outputQueue.pop();
+                
+                pthread_mutex_lock(&writerMutex);
+                data->writer->SaveAlignment(toWrite.item.al);
+                if (toWrite.item.isPaired) {
+                    data->writer->SaveAlignment(toWrite.item.al2);
+                }
+                pthread_mutex_unlock(&writerMutex);
+                
+                nextRankToWrite++;
+            }
+            pthread_mutex_unlock(&outputQueueMutex);
+        }
+    }
+    return NULL;
+}
+
+double get_memory_usage() {
+    struct rusage r_usage;
+    getrusage(RUSAGE_SELF, &r_usage);
+    return r_usage.ru_maxrss / 1024.0;  // Convert to MB
+}
+
+
+
+// struct CompareWorkItemRank {
+//     bool operator()(const WorkItem* a, const WorkItem* b) {
+//         return a->rank > b->rank;  // Priority queue is max heap, we want min rank first
+//     }
+// };
+
+// std::priority_queue<WorkItem*, vector<WorkItem*>, CompareWorkItemRank> outputQueue;
+// pthread_mutex_t outputQueueMutex = PTHREAD_MUTEX_INITIALIZER;
+// int nextRankToWrite = 0;
 
 int main (int argc, char *argv[]) {
 
@@ -1104,7 +1260,11 @@ int main (int argc, char *argv[]) {
 	}
 
 
-
+	if (strcmp(argv[i], "--threads") == 0 || strcmp(argv[i], "-t") == 0) {
+	    userSetThreads = atoi(argv[i+1]);
+	    i++;
+	    continue;
+	}
 
 
 	if(strcmp(argv[i],"--maxerr") == 0 ){
@@ -1224,7 +1384,6 @@ int main (int argc, char *argv[]) {
 
     bamFile=argv[argc-1];
     ifstream myIndexFile;
-
 
     //
     //  BEGIN : reading index file
@@ -1374,7 +1533,51 @@ int main (int argc, char *argv[]) {
     map<string,int> unknownSeq;
     map<string,int> wrongSeq;
     map<string,int> conflictSeq;
-    
+
+
+	
+	ThreadData threadData;
+	threadData.writer = &writer;
+	threadData.printError = printError;
+	threadData.unknownSeq = &unknownSeq;
+	threadData.wrongSeq = &wrongSeq;
+	threadData.conflictSeq = &conflictSeq;
+	threadData.failBAM = failBAM;
+
+	// std::cout << "Performing warm-up run..." << std::endl;
+
+	// Detect the number of available hardware threads
+	unsigned int hardwareThreads = std::thread::hardware_concurrency();
+
+	// Use all threads except 4, but ensure we have at least 1 thread
+	int numThreads = (userSetThreads > 0) ? userSetThreads : hardwareThreads - 2;
+	// int numThreads = std::max(1, static_cast<int>(hardwareThreads) - 2);
+	// int numThreads = 1;
+
+    std::cout << "--------------------------------------" << std::endl;
+	std::cout << "Total available hardware threads: " << hardwareThreads << std::endl;
+	std::cout << "Using " << numThreads << " threads for processing." << std::endl;
+	std::vector<pthread_t> threads(numThreads);
+
+	auto start = std::chrono::high_resolution_clock::now();
+    double start_memory = get_memory_usage();
+
+	for (int i = 0; i < numThreads; i++) {
+    	pthread_create(&threads[i], NULL, workerThread, &threadData);
+	}
+
+    auto end = std::chrono::high_resolution_clock::now();
+    double end_memory = get_memory_usage();
+
+    std::chrono::duration<double> elapsed = end - start;
+	// std::cout << "Total items processed: " << itemsProcessed << std::endl;
+    std::cout << "Time taken: " << elapsed.count() << " seconds" << std::endl;
+    std::cout << "Memory used: " << (end_memory - start_memory) << " MB" << std::endl;
+    std::cout << "--------------------------------------" << std::endl;
+	
+	// std::cout << "Warm-up complete. Starting timed runs." << std::endl;
+	itemsProcessed = 0; // Reset for next run
+
     if(useFastq){
 
 	processFastq(forwardfq,
@@ -1443,38 +1646,53 @@ int main (int argc, char *argv[]) {
 	    return 1;	
 	}
 
+	// This code reads alignments from the input, creates work items, and adds them to the queue for 
+	// processing by worker threads. After all data is read, it signals the worker threads to finish and 
+	// waits for them to complete.
 
-	BamAlignment al;
-	BamAlignment al2;
+	int currentRank = 0;
+	BamAlignment al, al2;
+	while (reader.GetNextAlignment(al)) {
+		WorkItem item;
+		item.al = al;
+		item.isPaired = false;
+		item.data = &threadData;
+		item.rank = currentRank++;
 
-	// damn, this logic is convoluted...
-	while( reader.GetNextAlignment(al) ) {
-	    while(1) {
-		if( !reader.GetNextAlignment(al2) ) {
-		    // EOF, process the one leftover record
-		    processSingleEndReads(al,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
-		    break; 
+		if (al.IsPaired() && reader.GetNextAlignment(al2) && al.Name == al2.Name) {
+			item.al2 = al2;
+			item.isPaired = true;
 		}
-		// If it's paired, both should have the same index, and we
-		// save some work.  Since the reads are probably not
-		// ordered, check the names first
-		if( al.IsPaired() && al.Name == al2.Name ) {
-		    processPairedEndReads(al,al2,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
-		    break ;
-		} else {
-		    // no match, treat one(!) separately
-		    processSingleEndReads(al ,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
-		    swap(al,al2) ;
-		}
-	    }
+
+		pthread_mutex_lock(&queueMutex);
+		workQueue.push(item);
+		pthread_cond_signal(&queueCond);
+		pthread_mutex_unlock(&queueMutex);
 	}
+
+	pthread_mutex_lock(&queueMutex);
+	allDataRead = true;
+	pthread_cond_broadcast(&queueCond);
+	pthread_mutex_unlock(&queueMutex);
+
+	for (int i = 0; i < numThreads; i++) {
+		pthread_join(threads[i], NULL);
+	}
+
+	pthread_mutex_lock(&outputQueueMutex);
+	while (!outputQueue.empty()) {
+		ProcessedWorkItem toWrite = outputQueue.top();
+		outputQueue.pop();
+		
+		writer.SaveAlignment(toWrite.item.al);
+		if (toWrite.item.isPaired) {
+			writer.SaveAlignment(toWrite.item.al2);
+		}
+	}
+	pthread_mutex_unlock(&outputQueueMutex);
 
 	reader.Close();
 	writer.Close();
-
-
-
-
 
 
     }//bam
