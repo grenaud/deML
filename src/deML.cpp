@@ -13,6 +13,7 @@
 #include <api/BamReader.h>
 #include <api/BamWriter.h>
 #include <api/BamAux.h>
+
 #include "RGAssign.h"
 #include "PutProgramInHeader.h"
 #include "FastQParser.h"
