@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 all: 	src/deML
 
-src/deML: SimpleJSON/obj/JSONValue.o libgab/libgab.a htslib/libhts.a
+src/deML: SimpleJSON/obj/JSONValue.o libgab/libgab.a libgab/gzstream/libgzstream.a htslib/libhts.a
 	make -C src
 
 SimpleJSON/obj/JSONValue.h:
@@ -23,6 +23,11 @@ libgab/libgab.h:
 # PutProgramInHeaderHTS.o); building just this target avoids needing bamtools.
 libgab/libgab.a: libgab/libgab.h
 	make -C libgab libgab.a
+
+# gzstream is a separate archive under libgab that deML links directly; the
+# libgab.a target does not build it, so build it explicitly here.
+libgab/gzstream/libgzstream.a: libgab/libgab.h
+	make -C libgab gzstream/libgzstream.a
 
 # htslib is vendored as a git submodule; clone (recursively, for htscodecs) and
 # build the static libhts.a. Only zlib is needed for BAM/BGZF, so the optional
