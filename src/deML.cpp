@@ -406,7 +406,9 @@ void updateRecord( bam1_t *al, const rgAssignment &rg , bool failBAM)
         delTag(al,"Z0");
         delTag(al,"Z1");
         delTag(al,"Z2");
-        zq += 'I';
+        // mark as unknown, but avoid a duplicate 'I' when rg.unknown already
+        // added one above (an unmatched read is always flagged unknown)
+        if( !rg.unknown ) zq += 'I';
     } else    {
         bam_aux_update_str(al,"RG",rg.predictedGroup.size()+1,rg.predictedGroup.c_str());
 
