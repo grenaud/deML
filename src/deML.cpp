@@ -5,24 +5,28 @@
 #include <sys/stat.h>
 #include <sstream>
 #include <map>
+#include <queue>
+#include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
+#include <atomic>
+#include <limits>
+#include <cstdlib>
 #include <gzstream.h>
 
 
-#include <api/SamHeader.h>
-#include <api/BamMultiReader.h>
-#include <api/BamReader.h>
-#include <api/BamWriter.h>
-#include <api/BamAux.h>
+#include <htslib/sam.h>
+#include <htslib/hts.h>
 
 #include "RGAssign.h"
-#include "PutProgramInHeader.h"
 #include "FastQParser.h"
 
 #include "JSON.h"
 #include "libgab.h"
 
 using namespace std;
-using namespace BamTools;
 
 typedef struct { 
 
@@ -69,6 +73,205 @@ PrefixTree<string> * trieKnownString;
 static string dashes = "--------------------------------";
 
 
+/****************************************/
+/*                                      */
+/*          MULTI-THREADING             */
+/*                                      */
+/****************************************/
+
+// Number of worker threads. 1 (the default) means the program runs
+// single-threaded on the main thread, byte-for-byte identical to the
+// original serial implementation. A value >1 activates the ordered
+// pipeline below.
+static int numberOfThreads = 1;
+
+// Number of input records ("work units") bundled into a single chunk
+// that is handed to a worker thread.
+static const size_t chunkSizeUnits = 20000;
+
+// Abort on an unrecoverable error from code that may run on a worker thread.
+// std::exit() would run atexit handlers and destroy namespace-scope objects
+// (e.g. the shared index trie) while other workers still read them, risking a
+// crash during shutdown; when threads are live, terminate immediately without
+// that teardown instead. The caller must already have printed a flushed
+// message (cerr<<...<<endl). Single-threaded behaviour is unchanged.
+[[noreturn]] static void fatalExit(){
+    if(numberOfThreads > 1)
+	std::_Exit(1);
+    exit(1);
+}
+
+// Protects all shared statistics: the global namesMap tally and the
+// per-run unknownSeq/wrongSeq/conflictSeq maps. Only ever contended
+// when numberOfThreads>1; uncontended (hence negligible) otherwise.
+static std::mutex statsMutex;
+
+
+// A chunk of work items carrying its position (rank) in the input so
+// that output can be re-ordered to exactly match input order.
+template<typename T>
+struct PipelineChunk {
+    long          rank;
+    std::vector<T> items;
+};
+
+template<typename T>
+struct PipelineChunkGreater {
+    // top() of the priority_queue is the SMALLEST rank (next to write)
+    bool operator()(PipelineChunk<T> * a, PipelineChunk<T> * b) const {
+        return a->rank > b->rank;
+    }
+};
+
+
+// Ordered parallel map: reads items with produce() (single threaded),
+// transforms each item with work() (concurrently on numThreads
+// workers), and emits each item with consume() (single threaded, in
+// the exact order produce() returned them).
+//
+//   produce(T&)  -> bool   fill the next item, return false at EOF
+//   work(T&)               heavy, thread-safe transformation, in place
+//   consume(T&)            write the item (called in input order)
+//
+// Ordering guarantee: every chunk keeps the rank it was read at; the
+// writer only ever emits the chunk whose rank == lastWritten+1, so the
+// output order is independent of which worker finished first.
+template<typename T, typename ProduceF, typename WorkF, typename ConsumeF>
+void runOrderedPipeline(int numThreads, size_t chunkSize,
+                        ProduceF produce, WorkF work, ConsumeF consume){
+
+    // ---- serial fast path: preserves the original behaviour exactly ----
+    if(numThreads <= 1){
+        T item;
+        while( produce(item) ){
+            work(item);
+            consume(item);
+        }
+        return;
+    }
+
+    typedef PipelineChunk<T> Chunk;
+
+    std::queue<Chunk *>                                                         procQ;   // input, FIFO
+    std::priority_queue<Chunk *, std::vector<Chunk *>, PipelineChunkGreater<T> > writeQ;  // output, ordered by rank
+
+    std::mutex              procM;
+    std::mutex              writeM;
+    std::mutex              readerM;
+    std::condition_variable procCV;    // procQ gained work OR readDone
+    std::condition_variable writeCV;   // writeQ gained a chunk OR the run finished
+    std::condition_variable readerCV;  // the writer advanced lastWritten (memory freed)
+
+    std::atomic<bool> readDone(false);
+    std::atomic<long> lastWritten(-1);
+    std::atomic<long> finalRank( std::numeric_limits<long>::max() ); // real value set when reader finishes
+    // Bound how many chunks the reader may run ahead of the writer, which caps
+    // total memory (procQ + in-flight + writeQ) without ever blocking a worker.
+    const long        maxOutstanding = std::max(2, 3*numThreads);
+
+    // ---- workers: procQ -> work() -> writeQ (heavy assignment, concurrent) ----
+    auto workerFn = [&](){
+        while(true){
+            Chunk * c = NULL;
+            {
+                std::unique_lock<std::mutex> lk(procM);
+                procCV.wait(lk, [&]{ return !procQ.empty() || readDone.load(); });
+                if( procQ.empty() )   // readDone && nothing left
+                    return;
+                c = procQ.front();
+                procQ.pop();
+            }
+            for(size_t i=0;i<c->items.size();i++)
+                work(c->items[i]);
+
+            {
+                std::lock_guard<std::mutex> lk(writeM);
+                writeQ.push(c);       // write queue is unbounded: workers never block
+            }
+            writeCV.notify_one();      // wake the writer thread
+        }
+    };
+
+    // ---- writer: drain writeQ strictly in rank order, on its own thread so
+    //      output compression overlaps the reader's input decompression ----
+    auto writerFn = [&](){
+        while(true){
+            Chunk * c = NULL;
+            {
+                std::unique_lock<std::mutex> lk(writeM);
+                writeCV.wait_for(lk, std::chrono::milliseconds(50), [&]{
+                    return ( !writeQ.empty() && writeQ.top()->rank == lastWritten.load()+1 )
+                        || ( lastWritten.load() == finalRank.load() );
+                });
+                if( !( !writeQ.empty() && writeQ.top()->rank == lastWritten.load()+1 ) ){
+                    if( lastWritten.load() == finalRank.load() )
+                        return;       // everything has been written
+                    continue;         // next chunk not ready yet
+                }
+                c = writeQ.top();
+                writeQ.pop();
+            }
+            for(size_t i=0;i<c->items.size();i++)
+                consume(c->items[i]);
+            lastWritten.store(c->rank);
+            delete c;
+            readerCV.notify_one();     // reader may resume producing
+        }
+    };
+
+    std::vector<std::thread> workers;
+    for(int i=0;i<numThreads;i++)
+        workers.push_back( std::thread(workerFn) );
+    std::thread writer(writerFn);
+
+    // Hand a finished chunk to the workers, throttling the reader so it never
+    // runs more than maxOutstanding chunks ahead of the writer.
+    auto pushChunk = [&](Chunk * c){
+        while( (c->rank - lastWritten.load()) > maxOutstanding ){
+            std::unique_lock<std::mutex> lk(readerM);
+            readerCV.wait_for(lk, std::chrono::milliseconds(2),
+                              [&]{ return (c->rank - lastWritten.load()) <= maxOutstanding; });
+        }
+        {
+            std::lock_guard<std::mutex> lk(procM);
+            procQ.push(c);
+        }
+        procCV.notify_one();
+    };
+
+    // ---- reader (this thread): produce chunks ----
+    long    rank = 0;
+    Chunk * cur  = new Chunk();
+    cur->rank = rank;
+
+    T item;
+    while( produce(item) ){
+        cur->items.push_back( std::move(item) );
+        item = T();
+        if( cur->items.size() >= chunkSize ){
+            pushChunk(cur);
+            rank++;
+            cur = new Chunk();
+            cur->rank = rank;
+        }
+    }
+    pushChunk(cur);                    // last chunk (may be empty; carries final rank)
+
+    finalRank.store(rank);
+    {
+        std::lock_guard<std::mutex> lk(procM);   // publish readDone to workers
+        readDone.store(true);
+    }
+    procCV.notify_all();
+    { std::lock_guard<std::mutex> lk(writeM); }  // publish finalRank to the writer
+    writeCV.notify_one();
+
+    for(size_t i=0;i<workers.size();i++)
+        workers[i].join();
+    writer.join();
+}
+
+
 map<string,string> p7id2seq;
 map<string,string> p5id2seq;
 
@@ -96,67 +299,72 @@ struct compareNameTally {
 };
 
 
-static string get_string_field( BamAlignment &al, const char* name ) 
+// Fetch a Z/H string tag into 'out'; returns false if the tag is absent
+// (or is not a string tag).
+static bool getZTag( bam1_t *b, const string & tag, string & out ){
+    uint8_t *p = bam_aux_get(b, tag.c_str());
+    if(!p) return false;
+    if( *p != 'Z' && *p != 'H' ) return false;
+    char *s = bam_aux2Z(p);
+    if(!s) return false;
+    out = s;
+    return true;
+}
+
+// Delete a tag if it is present.
+static inline void delTag( bam1_t *b, const char *tag ){
+    uint8_t *p = bam_aux_get(b, tag);
+    if(p) bam_aux_del(b, p);
+}
+
+static string get_string_field( bam1_t *b, const char* name )
 {
-    if(al.HasTag(name)) {
-        char ttype;
-        if( !al.GetTagType(name,ttype) ) {
-            cerr << "Unable to get tag ("<<name<<") type for read  " << al.Name<<endl;
-            exit(1);
-        }
-        if( ttype=='Z' || ttype=='H' ) {
-            string tagInfo;
-            if(!al.GetTag(name,tagInfo)){
-                cerr << "Unable to edit " << name << " tag" << endl;
-                exit(1);     
-            }
-            return tagInfo;
-        } else if( ttype=='A' ) {
-            int val;
-            if( !al.GetTag(name,val) ){
-                cerr << "Unable to edit " << name << " tag" << endl;
-                exit(1);     
-            }
-            return string(1,val) ;
-        }
+    uint8_t *p = bam_aux_get(b, name);
+    if(!p) return string();
+    char ttype = *p;
+    if( ttype=='Z' || ttype=='H' ){
+        char *s = bam_aux2Z(p);
+        return s ? string(s) : string();
+    } else if( ttype=='A' ){
+        return string(1, (char)bam_aux2A(p));
     }
     return string() ;
 }
 
-static bool getIndices( const BamAlignment &al,string & index1,string & index1Q,string & index2,string & index2Q,bool suppressErrors=false){
-    if(!al.GetTag(tagIndex1Seq,index1) ){ 	
+static bool getIndices( bam1_t *al,string & index1,string & index1Q,string & index2,string & index2Q,bool suppressErrors=false){
+    if(!getZTag(al,tagIndex1Seq,index1) ){
         if (!suppressErrors) {
-	    cerr << "Cannot retrieve "<<tagIndex1Seq<<" field  "<<al.Name << endl;
-	    exit(1); 
+	    cerr << "Cannot retrieve "<<tagIndex1Seq<<" field  "<<bam_get_qname(al) << endl;
+	    fatalExit();
         } else
             return false;
     }
 
-    if(!al.GetTag(tagIndex1Qual,index1Q)){ 	
+    if(!getZTag(al,tagIndex1Qual,index1Q)){
         if (!suppressErrors) {
-	    cerr << "Cannot retrieve "<<tagIndex1Qual<<" field  "<<al.Name << endl;
-	    exit(1); 
+	    cerr << "Cannot retrieve "<<tagIndex1Qual<<" field  "<<bam_get_qname(al) << endl;
+	    fatalExit();
         } else
             return false;
     }
 
-    if(!al.GetTag(tagIndex2Seq,index2)) {
+    if(!getZTag(al,tagIndex2Seq,index2)) {
         index2 ="";
         index2Q="";
     }
-    else if(!al.GetTag(tagIndex2Qual,index2Q)) { //we got XJ, double indexed
+    else if(!getZTag(al,tagIndex2Qual,index2Q)) { //we got XJ, double indexed
         if (!suppressErrors) {
-    	    cerr << "Cannot retrieve "<<tagIndex2Qual<<" field  "<<al.Name << endl;
-    	    exit(1); 
+    	    cerr << "Cannot retrieve "<<tagIndex2Qual<<" field  "<<bam_get_qname(al) << endl;
+    	    fatalExit();
         } else
             return false;
     }
-    
+
     return true;
 }
 
 
-void updateRecord( BamAlignment &al, const rgAssignment &rg , bool failBAM)
+void updateRecord( bam1_t *al, const rgAssignment &rg , bool failBAM)
 {
     // get old ZQ field, remove "ICW"
     string zq = get_string_field(al, "ZQ");
@@ -177,51 +385,56 @@ void updateRecord( BamAlignment &al, const rgAssignment &rg , bool failBAM)
     if( rg.predictedGroup.empty() ) {
 	predictedGroup="unknown";
     }
-    bool incrInTally=false;
-    if( rg.conflict ){ zq += 'C' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].conflict++; incrInTally=true;}  }
-    if( rg.wrong    ){ zq += 'W' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].wrong++;    incrInTally=true;}  }
-    if( rg.unknown  ){ zq += 'I' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].unknown++;  incrInTally=true;}  }
-    if(assigned){
-	namesMap[predictedGroup].assigned++;
+    if( rg.conflict ){ zq += 'C' ; assigned=false; }
+    if( rg.wrong    ){ zq += 'W' ; assigned=false; }
+    if( rg.unknown  ){ zq += 'I' ; assigned=false; }
+    {
+	// namesMap is shared across worker threads (see runOrderedPipeline)
+	std::lock_guard<std::mutex> lk(statsMutex);
+	bool incrInTally=false;
+	if( rg.conflict ){ if(!incrInTally){ namesMap[predictedGroup].conflict++; incrInTally=true;}  }
+	if( rg.wrong    ){ if(!incrInTally){ namesMap[predictedGroup].wrong++;    incrInTally=true;}  }
+	if( rg.unknown  ){ if(!incrInTally){ namesMap[predictedGroup].unknown++;  incrInTally=true;}  }
+	if(assigned){
+	    namesMap[predictedGroup].assigned++;
+	}
     }
 
 
     if( rg.predictedGroup.empty() ) {
-        al.RemoveTag("RG");
-        al.RemoveTag("Z0");
-        al.RemoveTag("Z1");
-        al.RemoveTag("Z2");
+        delTag(al,"RG");
+        delTag(al,"Z0");
+        delTag(al,"Z1");
+        delTag(al,"Z2");
         zq += 'I';
-	//namesMap[ "unknown" ] ++;
-	//        al.EditTag("RG","Z","unknown");
     } else    {
-	//namesMap[ predictedGroup ] ++;
-        al.EditTag("RG","Z",rg.predictedGroup);
+        bam_aux_update_str(al,"RG",rg.predictedGroup.size()+1,rg.predictedGroup.c_str());
 
-        al.EditTag("Z0","i",(int)round(-10 * rg.logLikelihoodScore));
+        bam_aux_update_int(al,"Z0",(int)round(-10 * rg.logLikelihoodScore));
 
         if( rg.logRatioTopToSecond <= 0 )
-            al.EditTag("Z1","i",(int)round(-10 * rg.logRatioTopToSecond));
+            bam_aux_update_int(al,"Z1",(int)round(-10 * rg.logRatioTopToSecond));
         else
-            al.RemoveTag("Z1") ;
+            delTag(al,"Z1") ;
 
 
 
         if( (rg.topWrongToTopCorrect) >= 0)  //if the log odds ratio is greater than 0, the ratio is greater than 1 and the mispairing scenario is more likely than the correct pairing one
-            al.EditTag("Z2","i",(int)round(10.0 * rg.topWrongToTopCorrect));
+            bam_aux_update_int(al,"Z2",(int)round(10.0 * rg.topWrongToTopCorrect));
         else
-            al.RemoveTag("Z2") ;
+            delTag(al,"Z2") ;
 
     }
 
     // store new ZQ field and set FailedQC flag if it isn't empty if failBAM
     if(failBAM){
-	al.SetIsFailedQC( !zq.empty() ) ;
-    
-	if( zq.empty() ) 
-	    al.RemoveTag("ZQ") ;
-	else 
-	    al.EditTag( "ZQ", "Z", zq ) ;
+	if( !zq.empty() ) al->core.flag |=  BAM_FQCFAIL;
+	else              al->core.flag &= ~BAM_FQCFAIL;
+
+	if( zq.empty() )
+	    delTag(al,"ZQ") ;
+	else
+	    bam_aux_update_str(al,"ZQ",zq.size()+1,zq.c_str()) ;
     }
 }
 
@@ -507,7 +720,37 @@ void check_thresholds( rgAssignment &rg ) {
     rg.wrong    =  (   10.0 * rg.topWrongToTopCorrect) > wrongness ;
 }
 
-void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq,bool failBAM)
+// One BAM "work unit": either a single read (paired==false, only a1 is
+// used) or a mate pair (paired==true, a1 & a2). The reader groups reads
+// into units so that a pair is never split across a chunk boundary.
+// Owns its htslib records; move-only so ownership transfers cleanly as the
+// unit flows reader -> worker -> writer through the ordered pipeline.
+struct ReadUnit {
+    bam1_t *a1;
+    bam1_t *a2;
+    bool    paired;
+
+    ReadUnit() : a1(NULL), a2(NULL), paired(false) {}
+    ~ReadUnit(){ if(a1) bam_destroy1(a1); if(a2) bam_destroy1(a2); }
+
+    ReadUnit(ReadUnit&& o) noexcept : a1(o.a1), a2(o.a2), paired(o.paired){ o.a1=NULL; o.a2=NULL; }
+    ReadUnit& operator=(ReadUnit&& o) noexcept {
+        if(this!=&o){
+            if(a1) bam_destroy1(a1);
+            if(a2) bam_destroy1(a2);
+            a1=o.a1; a2=o.a2; paired=o.paired;
+            o.a1=NULL; o.a2=NULL;
+        }
+        return *this;
+    }
+    ReadUnit(const ReadUnit&)            = delete;
+    ReadUnit& operator=(const ReadUnit&) = delete;
+};
+
+// Assigns a read group and edits the tags of 'al' in place. Does NOT
+// write the record: the caller (or the ordered pipeline's consume step)
+// is responsible for saving it, so that output stays in input order.
+void processSingleEndReads( bam1_t *al, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq,bool failBAM)
 {
     string index1;
     string index1Q;
@@ -520,7 +763,6 @@ void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError
     check_thresholds( rgReturn ) ;
 
     updateRecord(al,rgReturn,failBAM);
-    writer.SaveAlignment(al);
 
     //record unresolved indices
     if(printError){
@@ -531,6 +773,7 @@ void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError
 	    keyIndex=index1+"#"+index2;
 	}
 
+	std::lock_guard<std::mutex> lk(statsMutex);
 	if( rgReturn.conflict ) conflictSeq[ keyIndex ] ++;
 	if( rgReturn.unknown  ) unknownSeq [ keyIndex ] ++;
 	if( rgReturn.wrong    ) wrongSeq   [ keyIndex ] ++;
@@ -538,7 +781,8 @@ void processSingleEndReads( BamAlignment &al, BamWriter &writer, bool printError
 
 }
 
-void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writer, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq,bool failBAM)
+// Same as above for a read pair; edits both 'al' and 'al2' in place.
+void processPairedEndReads( bam1_t *al, bam1_t *al2, bool printError, map<string,int> &unknownSeq, map<string,int> &wrongSeq, map<string,int> &conflictSeq,bool failBAM)
 {
     string index1;
     string index1Q;
@@ -555,18 +799,16 @@ void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writ
     //check to see if the other indices are the same just for fun
     bool al2HasIndex=getIndices(al2,sindex1,sindex1Q,sindex2,sindex2Q,true);
 
-    if(al2HasIndex && (index1 !=sindex1 )){cerr<<"Seq#1 has a different index 1 than seq #2, exiting "        <<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
-    if(al2HasIndex && (index1Q!=sindex1Q)){cerr<<"Seq#1 has a different index 1 quality than seq #2, exiting "<<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
-    if(al2HasIndex && (index2 !=sindex2 )){cerr<<"Seq#1 has a different index 2 than seq #2, exiting "        <<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
-    if(al2HasIndex && (index2Q!=sindex2Q)){cerr<<"Seq#1 has a different index 2 quality than seq #2, exiting "<<al.Name<<" vs "<<al2.Name<< endl; exit(1);}
+    if(al2HasIndex && (index1 !=sindex1 )){cerr<<"Seq#1 has a different index 1 than seq #2, exiting "        <<bam_get_qname(al)<<" vs "<<bam_get_qname(al2)<< endl; fatalExit();}
+    if(al2HasIndex && (index1Q!=sindex1Q)){cerr<<"Seq#1 has a different index 1 quality than seq #2, exiting "<<bam_get_qname(al)<<" vs "<<bam_get_qname(al2)<< endl; fatalExit();}
+    if(al2HasIndex && (index2 !=sindex2 )){cerr<<"Seq#1 has a different index 2 than seq #2, exiting "        <<bam_get_qname(al)<<" vs "<<bam_get_qname(al2)<< endl; fatalExit();}
+    if(al2HasIndex && (index2Q!=sindex2Q)){cerr<<"Seq#1 has a different index 2 quality than seq #2, exiting "<<bam_get_qname(al)<<" vs "<<bam_get_qname(al2)<< endl; fatalExit();}
 
     rgAssignment rgReturn = assignReadGroup(index1,index1Q,index2,index2Q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
     check_thresholds( rgReturn ) ;
 
     updateRecord(al, rgReturn,failBAM);
     updateRecord(al2,rgReturn,failBAM);
-    writer.SaveAlignment(al);
-    writer.SaveAlignment(al2);
 
     // record unresolved indices
     if(printError){
@@ -577,6 +819,7 @@ void processPairedEndReads( BamAlignment &al, BamAlignment &al2, BamWriter &writ
             keyIndex=index1+"#"+index2;
         }
 
+        std::lock_guard<std::mutex> lk(statsMutex);
         if( rgReturn.conflict ) conflictSeq[ keyIndex ] += 1;
         if( rgReturn.unknown  ) unknownSeq [ keyIndex ] += 1;
         if( rgReturn.wrong    ) wrongSeq   [ keyIndex ] += 1;
@@ -598,17 +841,30 @@ void checkFD(){
 
 }
 
+// One fastq "work unit": the raw records read for a single template
+// (forward, index1, and optionally index2 and reverse), plus the read
+// group predicted for it by a worker thread.
+struct FqUnit {
+    string fId,  fSeq,  fQual;   // forward read
+    string i1Id, i1Seq, i1Qual;  // first index
+    string i2Id, i2Seq, i2Qual;  // second index  (only if hasId2Bool)
+    string rId,  rSeq,  rQual;    // reverse read  (only if hasRevBool)
+
+    string predictedGroup;        // filled by work()
+    bool   fail;                  // filled by work(): failed a threshold
+};
+
 void processFastq(string           forwardfq,
 		  string           reversefq,
 		  string           index1fq,
 		  string           index2fq,
 		  string           prefixOut,
-		  map<string,int> &unknownSeq, 
-		  map<string,int> &wrongSeq, 
+		  map<string,int> &unknownSeq,
+		  map<string,int> &wrongSeq,
 		  map<string,int> &conflictSeq,
 		  const bool       printSummary,
 		  const bool       printError){
-    
+
     FastQParser * fqpf=0;
     FastQParser * fqpr=0;
     FastQParser * fqpi1=0;
@@ -630,235 +886,202 @@ void processFastq(string           forwardfq,
     if(hasId2Bool)	
 	fqpi2 = new FastQParser (index2fq);
 
-    unsigned int totalSeqs=0;
+    // ---- reader: pull one template's records from the parsers (single threaded) ----
+    auto produce = [&](FqUnit &u) -> bool {
+        if(!fqpf->hasData())
+            return false;
 
-    while(fqpf->hasData()){
-	FastQObj * ffo=fqpf->getData();
-	FastQObj * rfo=0;
-	FastQObj * i1fo;
-	FastQObj * i2fo=0;
+        FastQObj * ffo = fqpf->getData();
 
-	string index1s;
-	string index2s;
+        vector<string> deff = allTokens( *(ffo->getID()), ' '  );
+        string deffs        = deff[0];
 
-	string index1q;
-	string index2q;
+        if(!fqpi1->hasData()){
+            cerr << "ERROR: Discrepancy between fastq files at record with first index " <<  *(ffo->getID()) <<endl;
+            exit(1);
+        }
 
-	vector<string> deff=allTokens( *(ffo->getID()), ' '  );
-	string deffs       =deff[0];
-	//cerr<<deffs<<endl;
+        FastQObj * i1fo = fqpi1->getData();
 
-	if(!fqpi1->hasData()){
-	    cerr << "ERROR: Discrepancy between fastq files at record with first index " <<  *(ffo->getID()) <<endl;
-	    exit(1);
-	}
-	
-	i1fo= fqpi1->getData();
+        if(strEndsWith(deffs,  "/1")){
+            deffs=deffs.substr(0,deffs.size()-2);
+        }
 
-	if(strEndsWith(deffs,  "/1")){
-	    deffs=deffs.substr(0,deffs.size()-2);
-	}
-	
-	// if(strBeginsWith(deffs,"@")){
-	//     deffs=deffs.substr(1,deffs.size()-1);
-	// }
+        vector<string> defi1 = allTokens( *(i1fo->getID()), ' '  );
+        string defi1s        = defi1[0];
 
+        if( (deffs != defi1s ) ){
+            cerr << "ERROR: Discrepancy between fastq files, different names with first index " <<deffs <<" and "<< defi1s <<endl;
+            exit(1);
+        }
 
-	vector<string> defi1 = allTokens( *(i1fo->getID()), ' '  );
-	string defi1s        = defi1[0];
+        u.fId  = *(ffo->getID());   u.fSeq  = *(ffo->getSeq());   u.fQual  = *(ffo->getQual());
+        u.i1Id = *(i1fo->getID());  u.i1Seq = *(i1fo->getSeq());  u.i1Qual = *(i1fo->getQual());
 
-	if( (deffs != defi1s ) ){
-	    cerr << "ERROR: Discrepancy between fastq files, different names with first index " <<deffs <<" and "<< defi1s <<endl;
-	    exit(1);
-	}
-	
-	index1s =  *(i1fo->getSeq());
-	index1q =  *(i1fo->getQual());
+        if(hasId2Bool){
+            if(!fqpi2->hasData()){
+                cerr << "ERROR: Discrepancy between fastq files at record with second index " <<  *(ffo->getID()) <<endl;
+                exit(1);
+            }
 
+            FastQObj * i2fo = fqpi2->getData();
+            vector<string> defi2 = allTokens( *(i2fo->getID()), ' '  );
+            string defi2s        = defi2[0];
 
-	if(hasId2Bool){
-	    if(!fqpi2->hasData()){
-		cerr << "ERROR: Discrepancy between fastq files at record with second index " <<  *(ffo->getID()) <<endl;
-		exit(1);
-	    }
-	    
-	    i2fo=fqpi2->getData();
-	    vector<string> defi2 = allTokens( *(i2fo->getID()), ' '  );
-	    string defi2s        = defi2[0];
+            if( (deffs != defi2s ) ){
+                cerr << "ERROR: Discrepancy between fastq files, different names with second index " <<deffs <<" and "<< defi2s <<endl;
+                exit(1);
+            }
 
+            u.i2Id = *(i2fo->getID()); u.i2Seq = *(i2fo->getSeq()); u.i2Qual = *(i2fo->getQual());
+        }
 
-	    if( (deffs != defi2s ) ){
-		cerr << "ERROR: Discrepancy between fastq files, different names with second index " <<deffs <<" and "<< defi2s <<endl;
-		exit(1);
-	    }
+        if(hasRevBool){
+            if(!fqpr->hasData()){
+                cerr << "ERROR: Discrepency between fastq files at record with second read " <<  *(ffo->getID()) <<endl;
+                exit(1);
+            }
 
-	    index2s =  *(i2fo->getSeq());
-	    index2q =  *(i2fo->getQual());
-	}
+            FastQObj * rfo = fqpr->getData();
+            vector<string> defr = allTokens( *(rfo->getID()), ' '  );
+            string defrs        = defr[0];
 
-	if(hasRevBool){
-	    if(!fqpr->hasData()){
-		cerr << "ERROR: Discrepency between fastq files at record with second read " <<  *(ffo->getID()) <<endl;
-		exit(1);
-	    }
+            if(strEndsWith(defrs,  "/2")){
+                defrs=defrs.substr(0,defrs.size()-2);
+            }
 
-	    rfo=fqpr->getData();
+            if( (deffs != defrs) ){
+                cerr << "ERROR: Discrepency between fastq files, different names " <<deffs <<" and "<< defrs <<endl;
+                exit(1);
+            }
 
-	    vector<string> defr=allTokens( *(rfo->getID()), ' '  );
-	    string defrs       =defr[0];
-	    
+            u.rId = *(rfo->getID()); u.rSeq = *(rfo->getSeq()); u.rQual = *(rfo->getQual());
+        }
 
-	    if(strEndsWith(defrs,  "/2")){
-		defrs=defrs.substr(0,defrs.size()-2);
-	    }
-	    
-	    // if(strBeginsWith(defrs,"@")){
-	    // 	defrs=deffs.substr(1,defrs.size()-1);
-	    // }
+        return true;
+    };
 
+    // ---- worker: assign the read group (heavy work, runs concurrently) ----
+    auto work = [&](FqUnit &u){
+        // assignReadGroup takes non-const references, so hand it local copies
+        string i1s=u.i1Seq, i1q=u.i1Qual, i2s=u.i2Seq, i2q=u.i2Qual;
+        rgAssignment rgReturn = assignReadGroup(i1s,i1q,i2s,i2q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
+        check_thresholds( rgReturn ) ;
 
-	    if( (deffs != defrs) ){
-		cerr << "ERROR: Discrepency between fastq files, different names " <<deffs <<" and "<< defrs <<endl;
-		exit(1);
-	    }
+        string predictedGroup = rgReturn.predictedGroup.empty() ? string("unknown") : rgReturn.predictedGroup;
 
-	}
+        //////////////////////////
+        //BEGIN update counters //
+        //////////////////////////
+        if(printSummary || printError){
+            std::lock_guard<std::mutex> lk(statsMutex);
 
-	
-	rgAssignment rgReturn = assignReadGroup(index1s,index1q,index2s,index2q,rgScoreCutoff,fracConflict,mismatchesTrie,qualOffset);
-	check_thresholds( rgReturn ) ;
-	string predictedGroup;
+            if(printSummary){
+                bool assigned=true;
+                bool incrInTally=false;
+                if( rgReturn.conflict ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].conflict++; incrInTally=true;}  }
+                if( rgReturn.wrong    ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].wrong++;    incrInTally=true;}  }
+                if( rgReturn.unknown  ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].unknown++;  incrInTally=true;}  }
+                if(assigned){
+                    namesMap[predictedGroup].assigned++;
+                }
+            }
 
+            if(printError){
+                string keyIndex;
+                if(!hasId2Bool){
+                    keyIndex=u.i1Seq;
+                }else{
+                    keyIndex=u.i1Seq+"#"+u.i2Seq;
+                }
 
-	//////////////////////////
-	//BEGIN update counters //
-	//////////////////////////
-	if(printSummary){
+                if( rgReturn.conflict ) conflictSeq[ keyIndex ] += 1;
+                if( rgReturn.unknown  ) unknownSeq [ keyIndex ] += 1;
+                if( rgReturn.wrong    ) wrongSeq   [ keyIndex ] += 1;
+            }
+        }
+        //////////////////////////
+        //  END update counters //
+        //////////////////////////
 
+        u.predictedGroup = predictedGroup;
+        u.fail           = ( rgReturn.conflict || rgReturn.wrong || rgReturn.unknown );
+    };
 
-	    string predictedGroup=rgReturn.predictedGroup;
-	    //will overwrite the RG
-	    bool assigned=true;
-	    if( rgReturn.predictedGroup.empty() ) {
-		predictedGroup="unknown";
-	    }
-	    bool incrInTally=false;
-	    if( rgReturn.conflict ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].conflict++; incrInTally=true;}  }
-	    if( rgReturn.wrong    ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].wrong++;    incrInTally=true;}  }
-	    if( rgReturn.unknown  ){  assigned=false; if(!incrInTally){ namesMap[predictedGroup].unknown++;  incrInTally=true;}  }
-	    if(assigned){
-		namesMap[predictedGroup].assigned++;
-	    }
-	}
-	
+    // ---- writer: open a read group's files on first sight, emit in input order ----
+    auto consume = [&](FqUnit &u){
+        const string & predictedGroup = u.predictedGroup;
 
-	if(printError){
-	    string keyIndex;
-	    if(!hasId2Bool){
-		keyIndex=index1s;
-	    }else{
-		keyIndex=index1s+"#"+index2s;
-	    }
+        if(rg2FqWriters.find(predictedGroup) == rg2FqWriters.end()){ //new
+            rg2FqWriters[predictedGroup] = new fqwriters();
 
-	    if( rgReturn.conflict ) conflictSeq[ keyIndex ] += 1;
-	    if( rgReturn.unknown  ) unknownSeq [ keyIndex ] += 1;
-	    if( rgReturn.wrong    ) wrongSeq   [ keyIndex ] += 1;
-	}
-	//////////////////////////
-	//  END update counters //
-	//////////////////////////
+            string outpairr1   = prefixOut+"_"+predictedGroup+"_"+"r1.fq.gz";
+            string outpairr2   = prefixOut+"_"+predictedGroup+"_"+"r2.fq.gz";
+            string outpairi1   = prefixOut+"_"+predictedGroup+"_"+"i1.fq.gz";
+            string outpairi2   = prefixOut+"_"+predictedGroup+"_"+"i2.fq.gz";
 
+            string outpairr1f   = prefixOut+"_"+predictedGroup+"_"+"r1.fail.fq.gz";
+            string outpairr2f   = prefixOut+"_"+predictedGroup+"_"+"r2.fail.fq.gz";
+            string outpairi1f   = prefixOut+"_"+predictedGroup+"_"+"i1.fail.fq.gz";
+            string outpairi2f   = prefixOut+"_"+predictedGroup+"_"+"i2.fail.fq.gz";
 
-	if( rgReturn.predictedGroup.empty() ) {
-	    predictedGroup="unknown";
-	}else{
-	    predictedGroup = rgReturn.predictedGroup;
-	}
-	
-	if(rg2FqWriters.find(predictedGroup) == rg2FqWriters.end()){ //new
-	    rg2FqWriters[predictedGroup] = new fqwriters();
+            rg2FqWriters[predictedGroup]->pairr1.open( outpairr1.c_str(),  ios::out);
+            rg2FqWriters[predictedGroup]->pairr1f.open(outpairr1f.c_str(), ios::out);
 
-	    string outpairr1   = prefixOut+"_"+predictedGroup+"_"+"r1.fq.gz";
-	    string outpairr2   = prefixOut+"_"+predictedGroup+"_"+"r2.fq.gz";
-	    string outpairi1   = prefixOut+"_"+predictedGroup+"_"+"i1.fq.gz";
-	    string outpairi2   = prefixOut+"_"+predictedGroup+"_"+"i2.fq.gz";
+            rg2FqWriters[predictedGroup]->pairi1.open( outpairi1.c_str(),  ios::out);
+            rg2FqWriters[predictedGroup]->pairi1f.open(outpairi1f.c_str(), ios::out);
 
-	    string outpairr1f   = prefixOut+"_"+predictedGroup+"_"+"r1.fail.fq.gz";
-	    string outpairr2f   = prefixOut+"_"+predictedGroup+"_"+"r2.fail.fq.gz";
-	    string outpairi1f   = prefixOut+"_"+predictedGroup+"_"+"i1.fail.fq.gz";
-	    string outpairi2f   = prefixOut+"_"+predictedGroup+"_"+"i2.fail.fq.gz";
+            if(!rg2FqWriters[predictedGroup]->pairr1.good()){          checkFD(); cerr<<"Cannot write to file "<< outpairr1 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; fatalExit(); }
+            if(!rg2FqWriters[predictedGroup]->pairr1f.good()){         checkFD(); cerr<<"Cannot write to file "<< outpairr1f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; fatalExit(); }
 
-	    rg2FqWriters[predictedGroup]->pairr1.open( outpairr1.c_str(),  ios::out);
-	    rg2FqWriters[predictedGroup]->pairr1f.open(outpairr1f.c_str(), ios::out);
-	    	    
-	    rg2FqWriters[predictedGroup]->pairi1.open( outpairi1.c_str(),  ios::out);
-	    rg2FqWriters[predictedGroup]->pairi1f.open(outpairi1f.c_str(), ios::out);
-
-	    //if(!onereadgroup.single.good()){      cerr<<"Cannot write to file "<<outdirsf<<endl; return 1; }
-	    if(!rg2FqWriters[predictedGroup]->pairr1.good()){          checkFD(); cerr<<"Cannot write to file "<< outpairr1 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-	    if(!rg2FqWriters[predictedGroup]->pairr1f.good()){         checkFD(); cerr<<"Cannot write to file "<< outpairr1f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-	    	    
-	    if(!rg2FqWriters[predictedGroup]->pairi1.good()){          checkFD(); cerr<<"Cannot write to file "<< outpairi1 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-	    if(!rg2FqWriters[predictedGroup]->pairi1f.good()){         checkFD(); cerr<<"Cannot write to file "<< outpairi1f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
+            if(!rg2FqWriters[predictedGroup]->pairi1.good()){          checkFD(); cerr<<"Cannot write to file "<< outpairi1 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; fatalExit(); }
+            if(!rg2FqWriters[predictedGroup]->pairi1f.good()){         checkFD(); cerr<<"Cannot write to file "<< outpairi1f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; fatalExit(); }
 
 
-	    if(hasId2Bool){
-		rg2FqWriters[predictedGroup]->pairi2.open( outpairi2.c_str(),  ios::out);
-		rg2FqWriters[predictedGroup]->pairi2f.open(outpairi2f.c_str(), ios::out);
+            if(hasId2Bool){
+                rg2FqWriters[predictedGroup]->pairi2.open( outpairi2.c_str(),  ios::out);
+                rg2FqWriters[predictedGroup]->pairi2f.open(outpairi2f.c_str(), ios::out);
 
-		if(!rg2FqWriters[predictedGroup]->pairi2.good()){      checkFD(); cerr<<"Cannot write to file "<< outpairi2 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-		if(!rg2FqWriters[predictedGroup]->pairi2f.good()){     checkFD(); cerr<<"Cannot write to file "<< outpairi2f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-	    }
+                if(!rg2FqWriters[predictedGroup]->pairi2.good()){      checkFD(); cerr<<"Cannot write to file "<< outpairi2 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; fatalExit(); }
+                if(!rg2FqWriters[predictedGroup]->pairi2f.good()){     checkFD(); cerr<<"Cannot write to file "<< outpairi2f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; fatalExit(); }
+            }
 
-	    if(hasRevBool){
-		rg2FqWriters[predictedGroup]->pairr2.open( outpairr2.c_str(),  ios::out);
-		rg2FqWriters[predictedGroup]->pairr2f.open(outpairr2f.c_str(), ios::out);
+            if(hasRevBool){
+                rg2FqWriters[predictedGroup]->pairr2.open( outpairr2.c_str(),  ios::out);
+                rg2FqWriters[predictedGroup]->pairr2f.open(outpairr2f.c_str(), ios::out);
 
-		if(!rg2FqWriters[predictedGroup]->pairr2.good()){      checkFD(); cerr<<"Cannot write to file "<<outpairr2 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }
-		if(!rg2FqWriters[predictedGroup]->pairr2f.good()){     checkFD(); cerr<<"Cannot write to file "<<outpairr2f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; exit(1); }	   
-	    }
-	}//end new rg
-	 
-
-	if(rgReturn.conflict  || rgReturn.wrong || rgReturn.unknown ){ //if the reads fail to meet thresholds
-
-	    rg2FqWriters[predictedGroup]->pairr1f     << *(ffo) <<endl;
-	    rg2FqWriters[predictedGroup]->pairi1f     << *(i1fo)<<endl;
-	    if(hasId2Bool){
-		rg2FqWriters[predictedGroup]->pairi2f << *(i2fo)<<endl;
-	    }
-	    
-	    if(hasRevBool){
-		rg2FqWriters[predictedGroup]->pairr2f << *(rfo)<<endl;
-	    }	    
-
-	}else{
-	    rg2FqWriters[predictedGroup]->pairr1     << *(ffo)<<endl;
-	    rg2FqWriters[predictedGroup]->pairi1     << *(i1fo)<<endl;
-	    if(hasId2Bool){
-		rg2FqWriters[predictedGroup]->pairi2 << *(i2fo)<<endl;
-	    }
-	    
-	    if(hasRevBool){
-		rg2FqWriters[predictedGroup]->pairr2 << *(rfo)<<endl;
-	    }	    
-	}
+                if(!rg2FqWriters[predictedGroup]->pairr2.good()){      checkFD(); cerr<<"Cannot write to file "<<outpairr2 <<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; fatalExit(); }
+                if(!rg2FqWriters[predictedGroup]->pairr2f.good()){     checkFD(); cerr<<"Cannot write to file "<<outpairr2f<<" either you do not have permissions or you have too many read groups, in that case, convert your input data to a single BAM file and demultiplex it"<<endl; fatalExit(); }
+            }
+        }//end new rg
 
 
+        if(u.fail){ //if the reads fail to meet thresholds
 
-	    //onereadgroup.pairr1<<"@"<<def1s<<"/2" <<endl <<*(fo1->getSeq())<<endl<<"+"<<endl <<*(fo1->getID())<<endl;
-			
+            rg2FqWriters[predictedGroup]->pairr1f     << u.fId  << "\n" << u.fSeq  << "\n+\n" << u.fQual  << "\n";
+            rg2FqWriters[predictedGroup]->pairi1f     << u.i1Id << "\n" << u.i1Seq << "\n+\n" << u.i1Qual << "\n";
+            if(hasId2Bool){
+                rg2FqWriters[predictedGroup]->pairi2f << u.i2Id << "\n" << u.i2Seq << "\n+\n" << u.i2Qual << "\n";
+            }
 
+            if(hasRevBool){
+                rg2FqWriters[predictedGroup]->pairr2f << u.rId  << "\n" << u.rSeq  << "\n+\n" << u.rQual  << "\n";
+            }
 
-	// 	rg.predictedGroup
-	// if( rg.conflict ){ zq += 'C' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].conflict++; incrInTally=true;}  }
-	// if( rg.wrong    ){ zq += 'W' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].wrong++;    incrInTally=true;}  }
-	// if( rg.unknown  ){ zq += 'I' ; assigned=false; if(!incrInTally){ namesMap[predictedGroup].unknown++;  incrInTally=true;}  }
+        }else{
+            rg2FqWriters[predictedGroup]->pairr1     << u.fId  << "\n" << u.fSeq  << "\n+\n" << u.fQual  << "\n";
+            rg2FqWriters[predictedGroup]->pairi1     << u.i1Id << "\n" << u.i1Seq << "\n+\n" << u.i1Qual << "\n";
+            if(hasId2Bool){
+                rg2FqWriters[predictedGroup]->pairi2 << u.i2Id << "\n" << u.i2Seq << "\n+\n" << u.i2Qual << "\n";
+            }
 
-	
-	
-    totalSeqs++;
-    }//end each record in fqpf
+            if(hasRevBool){
+                rg2FqWriters[predictedGroup]->pairr2 << u.rId  << "\n" << u.rSeq  << "\n+\n" << u.rQual  << "\n";
+            }
+        }
+    };
+
+    runOrderedPipeline<FqUnit>(numberOfThreads, chunkSizeUnits, produce, work, consume);
     
     //map<string,fqwriters *>::iterator rg2FqwritersIt;
     vector<string> allRgsFound  = allKeysMap(rg2FqWriters);
@@ -896,9 +1119,6 @@ void processFastq(string           forwardfq,
 
 
 int main (int argc, char *argv[]) {
-
-    BamReader reader;
-    BamWriter writer;
 
     string bamFile;
     string bamFileOUT="";
@@ -961,6 +1181,9 @@ int main (int argc, char *argv[]) {
 
 			      
 			      //"\t"+"\tOptional:"+"\n"+
+			      "\n\tPerformance options:"+"\n"+
+			      "\t\t"+"-t"+"\t\t[threads]"+"\t\t"+""+"Number of worker threads, output stays in input order (default : "+stringify(numberOfThreads)+")\n"+
+
 			      "\n\tOutput options:"+"\n"+
 			      "\t\t"+"--maxerr"+"\t[max err]"+"\t\t"+""+"Print  # wrongly of assigned RG in the error log (--error) ["+stringify(maxErrorHits)+"] \n"+
                               "\t\t"+"-u" +"\t\t\t\t\t"           +"Produce uncompressed bam (good for pipe)"+"\n"+ 
@@ -1141,6 +1364,16 @@ int main (int argc, char *argv[]) {
 	    continue;
 	}
 
+	if(strcmp(argv[i],"-t") == 0 ){
+	    numberOfThreads =destringify<int>(argv[i+1]);
+	    if(numberOfThreads < 1){
+		cerr<<"The number of threads (-t) must be at least 1"<<endl;
+		return 1;
+	    }
+	    i++;
+	    continue;
+	}
+
 
 
 	if(strcmp(argv[i],"-i") == 0 || strcmp(argv[i],"--index") == 0 ){
@@ -1190,7 +1423,16 @@ int main (int argc, char *argv[]) {
 
     if(index.size() == 0){
 	cerr<<"The field -i is mandatory exiting"<<endl;
-	return 1;             
+	return 1;
+    }
+
+    // The --ratio / --rgval binary dumps are written from inside
+    // assignReadGroup() as reads are processed. Under multiple threads
+    // their order would be non-deterministic (and the shared stream would
+    // be corrupted), so fall back to a single thread when they are used.
+    if( (ratioValuesFlag || rgqualFlag) && numberOfThreads > 1 ){
+	cerr<<"WARNING: --ratio/--rgval write per-read values in input order; forcing -t 1"<<endl;
+	numberOfThreads = 1;
     }
 
 
@@ -1392,40 +1634,58 @@ int main (int argc, char *argv[]) {
     }else{
 
 
-	if ( !reader.Open(bamFile) ) {
+	samFile *in = sam_open(bamFile.c_str(), "r");
+	if ( !in ) {
 	    cerr << "Could not open input BAM file  "<<bamFile << endl;
 	    return 1;
 	}
+	// multithreaded BGZF decompression
+	if( numberOfThreads > 1 ) hts_set_threads(in, numberOfThreads);
 
-	SamHeader  myHeader=reader.GetHeader();
-	SamProgram sp;
-   
-	string pID          = "deML";   
-	string pName        = "deML";   
+	sam_hdr_t *hdr = sam_hdr_read(in);
+	if( !hdr ){
+	    cerr << "Could not read header from input BAM file  "<<bamFile << endl;
+	    return 1;
+	}
+
 	string pCommandLine = "";
 	for(int i=0;i<(argc);i++){
 	    pCommandLine += (string(argv[i])+" ");
 	}
+	// add our @PG line (htslib chains PP to the previous program automatically)
+	if( sam_hdr_add_pg(hdr, "deML",
+			   "PN", "deML",
+			   "CL", pCommandLine.c_str(),
+			   "VN", returnGitHubVersion(string(argv[0]),"..").c_str(),
+			   NULL) < 0 ){
+	    cerr << "Warning: could not add @PG line to the BAM header" << endl;
+	}
 
-	putProgramInHeader(&myHeader,pID,pName,pCommandLine,returnGitHubVersion(string(argv[0]),".."));
+	// Replace any read groups already present in the input header with the
+	// ones from the index file (mirrors the old bamtools "ReadGroups=srgd").
+	sam_hdr_remove_except(hdr, "RG", NULL, NULL);
 
-	SamReadGroupDictionary  srgd;
-	map<string,string>::const_iterator itRG;   
+	map<string,string>::const_iterator itRG;
 	for ( itRG=rgs.begin(); itRG != rgs.end(); itRG++ ){
-	    SamReadGroup srg ( itRG->first );	
-	    srg.Description  = itRG->second; //description read in index file
-	    srgd.Add( srg );       	
-
-	    namesMap[ itRG->first ].assigned =0;
-	    namesMap[ itRG->first ].unknown  =0;
-	    namesMap[ itRG->first ].conflict =0;
-	    namesMap[ itRG->first ].wrong    =0;
-
 
 	    if(itRG->first == "conflict" || itRG->first == "unknown" || itRG->first == "wrong" ){
 		cerr<<"ERROR: The RG names cannot contain the words: \"conflict\" or \"unknown\" or \"wrong\""<<endl;
 		return 1;
 	    }
+
+	    // add @RG  ID:<name>  [DS:<description>]
+	    int rgrc;
+	    if( itRG->second.empty() )
+		rgrc = sam_hdr_add_line(hdr, "RG", "ID", itRG->first.c_str(), NULL);
+	    else
+		rgrc = sam_hdr_add_line(hdr, "RG", "ID", itRG->first.c_str(), "DS", itRG->second.c_str(), NULL);
+	    if( rgrc < 0 )
+		cerr<<"Warning: could not add read group "<<itRG->first<<" to the BAM header"<<endl;
+
+	    namesMap[ itRG->first ].assigned =0;
+	    namesMap[ itRG->first ].unknown  =0;
+	    namesMap[ itRG->first ].conflict =0;
+	    namesMap[ itRG->first ].wrong    =0;
 	}
 
 	namesMap[ "unknown" ].assigned=0;
@@ -1433,45 +1693,87 @@ int main (int argc, char *argv[]) {
 	namesMap[ "unknown" ].conflict=0;
 	namesMap[ "unknown" ].wrong=0;
 
-
-
-	myHeader.ReadGroups=srgd;
-	if(produceUnCompressedBAM)  
-	    writer.SetCompressionMode(BamWriter::Uncompressed); 
-
-	if( !writer.Open(outfile,myHeader,reader.GetReferenceData() ) ) {
+	samFile *out = sam_open(outfile.c_str(), produceUnCompressedBAM ? "wb0" : "wb");
+	if( !out ) {
 	    cerr << "Could not open output BAM file  "<<outfile << endl;
-	    return 1;	
+	    return 1;
+	}
+	// multithreaded BGZF compression
+	if( numberOfThreads > 1 ) hts_set_threads(out, numberOfThreads);
+
+	if( sam_hdr_write(out, hdr) < 0 ){
+	    cerr << "Could not write header to output BAM file  "<<outfile << endl;
+	    return 1;
 	}
 
 
-	BamAlignment al;
-	BamAlignment al2;
+	// Reader state for the look-ahead pairing below. 'pending' holds a
+	// record that was read while probing for a mate but turned out to
+	// belong to the next unit. Records are recycled by swapping pointers,
+	// so no BAM record is ever deep-copied.
+	bam1_t *pending     = bam_init1();
+	bool    havePending = false;
+	bool    readerEOF   = false;
 
-	// damn, this logic is convoluted...
-	while( reader.GetNextAlignment(al) ) {
+	// produce(): reproduce the original convoluted pairing logic, but
+	// emit one ReadUnit (single or pair) at a time instead of processing
+	// it directly. A pair therefore never straddles a chunk boundary.
+	auto produce = [&](ReadUnit &u) -> bool {
+	    if( !u.a1 ) u.a1 = bam_init1();
+	    if( havePending ){
+		std::swap(u.a1, pending);   // take the carried-over record
+		havePending = false;
+	    }else{
+		if( readerEOF ) return false;
+		if( sam_read1(in, hdr, u.a1) < 0 ){ readerEOF = true; return false; }
+	    }
+
 	    while(1) {
-		if( !reader.GetNextAlignment(al2) ) {
-		    // EOF, process the one leftover record
-		    processSingleEndReads(al,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
-		    break; 
+		if( !u.a2 ) u.a2 = bam_init1();
+		if( sam_read1(in, hdr, u.a2) < 0 ) {
+		    // EOF: u.a1 is a leftover single
+		    readerEOF = true;
+		    u.paired  = false;
+		    return true;
 		}
 		// If it's paired, both should have the same index, and we
 		// save some work.  Since the reads are probably not
 		// ordered, check the names first
-		if( al.IsPaired() && al.Name == al2.Name ) {
-		    processPairedEndReads(al,al2,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
-		    break ;
+		if( (u.a1->core.flag & BAM_FPAIRED) &&
+		    strcmp(bam_get_qname(u.a1), bam_get_qname(u.a2))==0 ) {
+		    u.paired = true;            // u.a2 already holds the mate
+		    return true;
 		} else {
-		    // no match, treat one(!) separately
-		    processSingleEndReads(al ,writer,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
-		    swap(al,al2) ;
+		    // no match, treat u.a1 as a single and carry u.a2 over
+		    u.paired    = false;
+		    std::swap(pending, u.a2);   // stash the look-ahead record
+		    havePending = true;
+		    return true;
 		}
 	    }
-	}
+	};
 
-	reader.Close();
-	writer.Close();
+	// work(): the heavy read-group assignment, thread-safe, in place.
+	auto work = [&](ReadUnit &u){
+	    if( u.paired )
+		processPairedEndReads(u.a1,u.a2,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
+	    else
+		processSingleEndReads(u.a1,printError,unknownSeq,wrongSeq,conflictSeq,failBAM);
+	};
+
+	// consume(): save the processed records in input order.
+	auto consume = [&](ReadUnit &u){
+	    if( sam_write1(out, hdr, u.a1) < 0 ){ cerr<<"Error writing BAM record"<<endl; fatalExit(); }
+	    if( u.paired )
+		if( sam_write1(out, hdr, u.a2) < 0 ){ cerr<<"Error writing BAM record"<<endl; fatalExit(); }
+	};
+
+	runOrderedPipeline<ReadUnit>(numberOfThreads, chunkSizeUnits, produce, work, consume);
+
+	bam_destroy1(pending);
+	sam_hdr_destroy(hdr);
+	if( sam_close(in)  < 0 ){ cerr << "Error closing input BAM file  "<<bamFile << endl; }
+	if( sam_close(out) < 0 ){ cerr << "Error closing output BAM file "<<outfile<< endl; return 1; }
 
 
 

@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 all: 	src/deML
 
-src/deML: SimpleJSON/obj/JSONValue.o libgab/libgab.a bamtools/build/src/api/libbamtools.a
+src/deML: SimpleJSON/obj/JSONValue.o libgab/libgab.a htslib/libhts.a
 	make -C src
 
 SimpleJSON/obj/JSONValue.h:
@@ -19,17 +19,20 @@ libgab/libgab.h:
 	rm -rf libgab/
 	git clone --recursive https://github.com/grenaud/libgab.git
 
+# libgab.a is the bamtools-free core (libgab.o, FastQObj.o, FastQParser.o,
+# PutProgramInHeaderHTS.o); building just this target avoids needing bamtools.
+libgab/libgab.a: libgab/libgab.h
+	make -C libgab libgab.a
 
-libgab/libgab.a: bamtools/build/src/api/libbamtools.a  libgab/libgab.h
-	make -C libgab
+# htslib is vendored as a git submodule; clone (recursively, for htscodecs) and
+# build the static libhts.a. Only zlib is needed for BAM/BGZF, so the optional
+# bz2/lzma/libcurl backends are disabled to keep the link dependencies minimal.
+htslib/Makefile:
+	git submodule update --init --recursive htslib || \
+	  git clone --recursive https://github.com/samtools/htslib.git htslib
 
-bamtools/src/api/BamAlignment.h:
-	rm -rf bamtools/
-	git clone --recursive https://github.com/pezmaster31/bamtools.git
-
-
-bamtools/build/src/api/libbamtools.a: bamtools/src/api/BamAlignment.h
-	cd bamtools/ && mkdir -p build/  && cd build/ && if cmake ..; then echo ""; else if cmake3 ..; then echo ""; else echo "cmake failed, please install cmake v3"; fi  fi && make && cd ../..
+htslib/libhts.a: htslib/Makefile
+	cd htslib && autoreconf -i && ./configure --disable-bz2 --disable-lzma --disable-libcurl && $(MAKE) libhts.a
 
 
 

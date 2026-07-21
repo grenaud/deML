@@ -1,4 +1,5 @@
 #include "RGAssign.h"
+#include <atomic>
 // vim:ts=8
 
 //#define DEBUG
@@ -8,13 +9,16 @@
 
 PrefixTree<int> * indTrie1;
 PrefixTree<int> * indTrie2;
-indexData values;               
+indexData values;
 
 ofstream * ratioValues;
 ofstream * rgqual;
 bool flag_ratioValues=false;
 bool flag_rgqual=false;
-bool warnedForDouble=false;
+// assignReadGroup runs concurrently on worker threads; make the one-shot
+// "single index" warning thread-safe so exactly one thread prints it and the
+// flag update is not a data race.
+std::atomic<bool> warnedForDouble(false);
 
 
 // array containing the log10 of likelihoods corresponding to quality
@@ -452,6 +456,19 @@ rgAssignment assignReadGroup(string &index1,
     //END DEBUG
 
     rgAssignment toReturn;
+    // Initialise every field so the early "unknown" return below (empty
+    // foundIndices) is deterministic. Without this, check_thresholds()
+    // would read uninitialised memory, making the conflict/wrong/unknown
+    // flags of unmatched reads depend on stack garbage (and therefore on
+    // the number of threads). Defaults describe a read that is clearly
+    // unknown but neither a conflict nor wrongly paired.
+    toReturn.conflict             = false;
+    toReturn.wrong                = false;
+    toReturn.unknown              = false;
+    toReturn.logRatioTopToSecond  = 1.0;              // >0  -> not a conflict
+    toReturn.logLikelihoodScore   = -1.0*1000000;     // very unlikely -> unknown
+    toReturn.topWrongToTopCorrect = -1.0*1000000;     // -inf for practical purposes -> not wrong
+    toReturn.numberOfMismatches   = 0;
 
     vector<int> quals1;
     vector<int> quals2;
@@ -476,9 +493,8 @@ rgAssignment assignReadGroup(string &index1,
 
     if(!index2.empty()){
 	if(!values.isDoubleIndex){
-	    if(!warnedForDouble){
+	    if(!warnedForDouble.exchange(true)){ // only the first thread prints
 		cerr<<"WARNING : THIS RUN IS DOUBLE INDEXED YET YOUR INDEX IS SINGLE INDEXED"<<endl;
-		warnedForDouble=true;
 	    }
 	}else{
 	    indTrie2->searchMismatch(  index2.c_str(),&matchesind2,mismatchesTrie);
@@ -622,7 +638,7 @@ rgAssignment assignReadGroup(string &index1,
 	    if(indexP7ForTop == -1 ||
 	       indexP5ForTop == -1 ){
 		cerr<<"Internal error, unable to trace back the likelihood for one of the index pairs"<<endl;
-		exit(1);
+		std::_Exit(1); // may run on a worker thread; skip destructor teardown
 	    }
 
 	    if(indexP7ForTop != 0){//not first one
@@ -694,7 +710,7 @@ rgAssignment assignReadGroup(string &index1,
 	    if(indexP7LikeForP5Top == -1 ||
 	       indexP5LikeForP7Top == -1 ){
 		cerr<<"Internal error, unable to trace back the likelihood for one of the index pairs"<<endl;
-		exit(1);
+		std::_Exit(1); // may run on a worker thread; skip destructor teardown
 	    }
 	       
 	  
