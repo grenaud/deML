@@ -39,12 +39,27 @@ htslib/Makefile:
 htslib/libhts.a: htslib/Makefile
 	cd htslib && autoreconf -i && ./configure --disable-bz2 --disable-lzma --disable-libcurl && $(MAKE) libhts.a
 
+# htsfile is only used by "make test", to turn the output BAM back into SAM text
+# so it can be md5summed independently of the BGZF compression.
+htslib/htsfile: htslib/libhts.a
+	$(MAKE) -C htslib htsfile
+
+# Demultiplex testData/ in both BAM and fastq mode and compare md5sums of the
+# (decompressed) output against testData/expected.md5.
+test: src/deML htslib/htsfile
+	testData/runTests.sh
+
+# Same run, but overwrite testData/expected.md5 with the md5sums just produced.
+# Only do this when the output is known to have changed for a good reason.
+test-update: src/deML htslib/htsfile
+	testData/runTests.sh --update
 
 
 clean:
+	rm -rf testData/testout
 	make -C SimpleJSON clean
 	make -C libgab clean
 	make -C src clean
 
 
-.PHONY: all
+.PHONY: all test test-update clean

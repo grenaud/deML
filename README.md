@@ -124,6 +124,29 @@ For FASTQ files
     src/deML -i testData/index.txt -f testData/todemultiplex.fq1.gz  -r testData/todemultiplex.fq2.gz -if1 testData/todemultiplex.i1.gz  -if2 testData/todemultiplex.i2.gz   -o testData/demultiplexed.
 
 
+Regression test:
+----------------------
+
+To check that a build reproduces the reference output, type:
+
+    make test
+
+This demultiplexes the files in testData/ in both BAM and fastq mode, checks that
+running with -t 4 gives the same result as running single threaded, and compares
+md5sums of the output against testData/expected.md5. The md5sums are computed on
+the *decompressed* output (BAM converted back to SAM text with htslib's htsfile,
+minus the @PG lines, and the fastq.gz files uncompressed) since the exact bytes
+of a BAM or a gzip file depend on the zlib and htslib versions.
+
+Output is written to testData/testout/, which is deleted when the test passes and
+kept for inspection when it fails.
+
+If you change deML in a way that legitimately changes its output, regenerate the
+reference md5sums with:
+
+    make test-update
+
+
 Explanation for the scores
 ----------------------
 
