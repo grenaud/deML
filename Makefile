@@ -31,13 +31,15 @@ libgab/gzstream/libgzstream.a: libgab/libgab.h
 
 # htslib is vendored as a git submodule; clone (recursively, for htscodecs) and
 # build the static libhts.a. Only zlib is needed for BAM/BGZF, so the optional
-# bz2/lzma/libcurl backends are disabled to keep the link dependencies minimal.
+# bz2/lzma/libcurl/libdeflate backends are disabled to keep the link dependencies
+# minimal (configure would otherwise auto-detect libdeflate where installed, and
+# deML's link line does not pass -ldeflate).
 htslib/Makefile:
 	git submodule update --init --recursive htslib || \
 	  git clone --recursive https://github.com/samtools/htslib.git htslib
 
 htslib/libhts.a: htslib/Makefile
-	cd htslib && autoreconf -i && ./configure --disable-bz2 --disable-lzma --disable-libcurl && $(MAKE) libhts.a
+	cd htslib && autoreconf -i && ./configure --disable-bz2 --disable-lzma --disable-libcurl --without-libdeflate && $(MAKE) libhts.a
 
 # htsfile is only used by "make test", to turn the output BAM back into SAM text
 # so it can be md5summed independently of the BGZF compression.
