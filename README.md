@@ -3,6 +3,10 @@
 deML: Maximum likelihood demultiplexing for NGS data
 ==========================================================
 
+[![GitHub release](https://img.shields.io/github/v/release/grenaud/deML)](https://github.com/grenaud/deML/releases/latest)
+[![License](https://img.shields.io/github/license/grenaud/deML)](LICENSE)
+[![DOI](https://img.shields.io/badge/DOI-10.1093%2Fbioinformatics%2Fbtu719-blue.svg)](https://doi.org/10.1093/bioinformatics/btu719)
+
 QUESTIONS :
    gabriel [dot] reno [ at sign ] gmail.com
 
@@ -12,6 +16,30 @@ About
 
 deML is a program for maximum likelihood demultiplexing
 of next-generation sequencing data. 
+
+
+## How to cite
+
+If you use deML in your work, please cite:
+
+> Renaud G, Stenzel U, Maricic T, Wiebe V, Kelso J. deML: robust demultiplexing of Illumina sequences using a likelihood-based approach. *Bioinformatics* 2015;31(5):770–772. [doi:10.1093/bioinformatics/btu719](https://doi.org/10.1093/bioinformatics/btu719)
+
+BibTeX:
+
+```bibtex
+@article{Renaud2015deML,
+  author    = {Renaud, Gabriel and Stenzel, Udo and Maricic, Tomislav and Wiebe, Victor and Kelso, Janet},
+  title     = {{{deML}: robust demultiplexing of {Illumina} sequences using a likelihood-based approach}},
+  journal   = {Bioinformatics},
+  year      = {2015},
+  volume    = {31},
+  number    = {5},
+  pages     = {770--772},
+  publisher = {Oxford University Press},
+  doi       = {10.1093/bioinformatics/btu719},
+  url       = {https://doi.org/10.1093/bioinformatics/btu719}
+}
+```
 
 
 Downloading:
